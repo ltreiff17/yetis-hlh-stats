@@ -609,18 +609,17 @@ function App() {
       </div>
 
       {/* Header */}
-      <div style={{background:tc,color:"#fff",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderRadius:"10px 10px 0 0"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          {teamLogos[activeTeam]&&<img src={teamLogos[activeTeam]} alt="" style={{width:40,height:40,objectFit:"contain",flexShrink:0}}/>}
-          <div>
-            <div style={{fontSize:17,fontWeight:600,lineHeight:1.2}}>{team.name}</div>
-            {record.GP>0&&season!=="All Time"
-              ? <div style={{fontSize:13,opacity:0.85,marginTop:2}}>{record.W+"-"+record.L+(record.T>0?"-"+record.T:"")+(record.OTL>0?" ("+record.OTL+" OTL)":"")}</div>
-              : <div style={{fontSize:12,opacity:0.7,marginTop:2}}>{season}</div>
-            }
+      <div style={{background:tc,color:"#fff",padding:"12px 16px",borderRadius:"10px 10px 0 0"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            {teamLogos[activeTeam]&&<img src={teamLogos[activeTeam]} alt="" style={{width:40,height:40,objectFit:"contain",flexShrink:0}}/>}
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:17,fontWeight:600,lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{team.name}</div>
+              {record.GP>0&&season!=="All Time"&&<div style={{fontSize:13,opacity:0.85,marginTop:2}}>{record.W+"-"+record.L+(record.T>0?"-"+record.T:"")+(record.OTL>0?" ("+record.OTL+" OTL)":"")}</div>}
+            </div>
           </div>
+          <div style={{fontSize:12,opacity:0.75,flexShrink:0,marginLeft:8,textAlign:"right"}}>{season}</div>
         </div>
-        <span style={{fontSize:12,opacity:0.75}}>{record.GP>0&&season!=="All Time"?season:""}</span>
       </div>
 
       {/* Nav */}
