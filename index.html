@@ -76,7 +76,7 @@ return <div>
 <div style={{background:”#fff”,border:“2px dashed “+tc+“55”,borderRadius:12,padding:16,marginBottom:16,textAlign:“center”}}>
 <div style={{fontSize:13,color:”#777”,marginBottom:10}}>{season===“All Time”?“Uploading to: “:“Season: “}<span style={{fontWeight:600,color:tc}}>{uploadSeason}</span></div>
 <input ref={fileRef} type=“file” accept=“image/*” multiple style={{display:“none”}} onChange={handleFiles}/>
-<button onClick={()=>fileRef.current.click()} style={{…s.btn,background:tc,fontSize:14,padding:“10px 22px”}}>📷 Upload Photos</button>
+<button onClick={()=>fileRef.current.click()} style={{…s.btn,background:tc,fontSize:14,padding:“10px 22px”}}>Upload Photos</button>
 <div style={{fontSize:11,color:”#bbb”,marginTop:8}}>JPG, PNG · Multiple allowed</div>
 </div>
 {photos.length===0&&<div style={{textAlign:“center”,padding:“40px 0”,color:”#aaa”,fontSize:14}}>No photos yet for {season}.<br/>Be the first to upload one!</div>}
@@ -96,7 +96,7 @@ function Lightbox({photo,tc,isAdmin,onDelete,onClose}){
 return <div onClick={onClose} style={{position:“fixed”,inset:0,background:“rgba(0,0,0,0.92)”,zIndex:1000,display:“flex”,flexDirection:“column”,alignItems:“center”,justifyContent:“center”,padding:16}}>
 <div style={{position:“absolute”,top:16,right:16,display:“flex”,gap:10}}>
 {isAdmin&&<button onClick={e=>{e.stopPropagation();onDelete();}} style={{background:“rgba(196,26,26,0.85)”,border:“none”,color:”#fff”,borderRadius:8,padding:“7px 14px”,cursor:“pointer”,fontSize:13,fontWeight:600}}>Delete</button>}
-<button onClick={onClose} style={{background:“rgba(255,255,255,0.15)”,border:“none”,color:”#fff”,borderRadius:8,padding:“7px 14px”,cursor:“pointer”,fontSize:20,lineHeight:1}}>×</button>
+<button onClick={onClose} style={{background:“rgba(255,255,255,0.15)”,border:“none”,color:”#fff”,borderRadius:8,padding:“7px 14px”,cursor:“pointer”,fontSize:20,lineHeight:1}}>x</button>
 </div>
 <img src={photo.url} alt=”” onClick={e=>e.stopPropagation()} style={{maxWidth:“100%”,maxHeight:“80vh”,borderRadius:12,objectFit:“contain”}}/>
 {photo.seasonLabel&&<div style={{marginTop:12,color:“rgba(255,255,255,0.55)”,fontSize:12,textAlign:“center”}}>{photo.seasonLabel}</div>}
@@ -119,7 +119,7 @@ if(!d.gallery)d.gallery={};
 if(!d.teamOrder)d.teamOrder=Object.keys(d.teams);
 Object.keys(d.teams).forEach(tid=>{const cfg=getTeamCfg(d,tid);(d.players[tid]||[]).forEach(p=>{if(!p.activeSeasons)p.activeSeasons=[…cfg.seasons.filter(s=>s!==“All Time”)];});});
 localStorage.setItem(“hockeyApp2”,JSON.stringify(d));return d;
-}catch{return initData();}
+}catch(e){return initData();}
 });
 const [activeTeam,setActiveTeam]=useState(“team1”);
 const [season,setSeason]=useState(“Winter 2025-2026”);
@@ -131,7 +131,7 @@ const [modal,setModal]=useState(null);
 const [isAdmin,setIsAdmin]=useState(false);
 const [lightbox,setLightbox]=useState(null);
 
-const save=d=>{setData(d);try{localStorage.setItem(“hockeyApp2”,JSON.stringify(d));}catch{}};
+const save=d=>{setData(d);try{localStorage.setItem(“hockeyApp2”,JSON.stringify(d));}catch(e){}};
 const teamCfg=getTeamCfg(data,activeTeam);
 const team=data.teams[activeTeam];
 const players=data.players[activeTeam]||[];
@@ -159,7 +159,7 @@ card:{background:”#fff”,border:“0.5px solid #ddd”,borderRadius:10,paddin
 };
 
 function savePlayer(p,isEdit){const d=JSON.parse(JSON.stringify(data));if(isEdit)d.players[activeTeam]=d.players[activeTeam].map(x=>x.id===p.id?p:x);else d.players[activeTeam].push({…p,id:“p”+Date.now()});save(d);setModal(null);}
-function deletePlayer(id){const d=JSON.parse(JSON.stringify(data));d.players[activeTeam]=d.players[activeTeam].filter(p=>p.id!==id);save(d);setModal(null);if(selectedPlayer?.id===id){setSelectedPlayer(null);setPage(“roster”);}}
+function deletePlayer(id){const d=JSON.parse(JSON.stringify(data));d.players[activeTeam]=d.players[activeTeam].filter(p=>p.id!==id);save(d);setModal(null);if(selectedPlayer&&selectedPlayer.id===id){setSelectedPlayer(null);setPage(“roster”);}}
 function saveGame(game){const d=JSON.parse(JSON.stringify(data));d.games[activeTeam].push({…game,id:“g”+Date.now()});save(d);setModal(null);setPage(“home”);}
 function deleteGame(gid){const d=JSON.parse(JSON.stringify(data));d.games[activeTeam]=d.games[activeTeam].filter(g=>g.id!==gid);save(d);}
 function saveStatOverride(player,vals){const d=JSON.parse(JSON.stringify(data));d.statOverrides[player.id+”_”+season]={…vals};save(d);setModal(null);}
@@ -200,7 +200,6 @@ style={{flex:1,minWidth:120,padding:“8px 6px”,borderRadius:10,border:“2px 
 <span>{t.name}</span>
 </button>
 );})}
-None
 </div>
 <div style={{marginBottom:14}}><select value={season} onChange={e=>setSeason(e.target.value)} style={s.input}>{seasons.map(sv=><option key={sv} value={sv}>{sv}</option>)}</select></div>
 <div style={{background:tc,color:”#fff”,padding:“12px 16px”,display:“flex”,alignItems:“center”,justifyContent:“space-between”,borderRadius:“10px 10px 0 0”}}>
@@ -247,7 +246,7 @@ style={{flex:1,padding:“10px 2px”,background:(page===p&&!selectedPlayer)?tc:
     const sumG=["GP","W","L","GAA"],sumS=["GP","G","A","P"];
     const brkG=["GP","W","L","T","OTL","SO","GA","GAA"],brkS=["GP","G","A","P","PPG","PIM"];
     return <div>
-      <button onClick={()=>{setSelectedPlayer(null);setModal(null);}} style={{...s.sec,marginBottom:14,fontSize:13}}>← Back</button>
+      <button onClick={()=>{setSelectedPlayer(null);setModal(null);}} style={{...s.sec,marginBottom:14,fontSize:13}}>Back</button>
       <div style={{background:tc,borderRadius:12,padding:20,color:"#fff",marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:16}}>
           <PhotoAvatar photo={photo} number={p.number} size={64} tc={tc} pid={p.id} onSave={savePhoto}/>
@@ -374,7 +373,7 @@ style={{flex:1,padding:“10px 2px”,background:(page===p&&!selectedPlayer)?tc:
             <div style={{fontSize:13,color:"#777",marginTop:2}}>{g.date+" · "+g.season}</div>
             {g.score&&<div style={{fontSize:13,marginTop:2}}>{"Score: "+g.score}</div>}
           </div>
-          <button onClick={()=>requireAdmin(()=>deleteGame(g.id))} style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:20,lineHeight:1,padding:"0 4px"}}>×</button>
+          <button onClick={()=>requireAdmin(()=>deleteGame(g.id))} style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:20,lineHeight:1,padding:"0 4px"}}>x</button>
         </div>
       </div>;
     })}
@@ -382,7 +381,7 @@ style={{flex:1,padding:“10px 2px”,background:(page===p&&!selectedPlayer)?tc:
 
   {modal&&<div style={{marginTop:8,background:"#fff",borderRadius:14,border:"2px solid "+tc,padding:20}}>
     <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
-      <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#777",lineHeight:1}}>×</button>
+      <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#777",lineHeight:1}}>x</button>
     </div>
     {modal.type==="adminLogin"&&<AdminLoginModal onSuccess={()=>{setIsAdmin(true);setModal(null);modal.onSuccess();}} onClose={()=>setModal(null)} s={s} tc={tc} adminPassword={data.adminPassword}/>}
     {(modal.type==="addPlayer"||modal.type==="editPlayer")&&<PlayerModal modal={modal} onSave={savePlayer} onDelete={deletePlayer} onClose={()=>setModal(null)} s={s} tc={tc} teamSeasons={seasons}/>}
@@ -412,10 +411,10 @@ return <div style={{position:“relative”,borderRadius:12,overflow:“hidden�
 <span style={{fontSize:11,color:”#aaa”,marginLeft:“auto”}}>{game.date}</span>
 </div>
 <div style={{fontWeight:700,fontSize:17,lineHeight:1.25,marginBottom:6,color:”#111”}}>{game.article?game.article.headline:(“vs “+game.opponent)}</div>
-<div style={{fontSize:12,color:”#777”,marginBottom:game.article?.body?6:0,fontWeight:500}}>{“vs “+game.opponent+” · “+game.season}</div>
+<div style={{fontSize:12,color:”#777”,marginBottom:game.article&&game.article.body?6:0,fontWeight:500}}>{“vs “+game.opponent+” · “+game.season}</div>
 {game.article&&<>
 <div style={{fontSize:13,color:”#333”,lineHeight:1.65,marginTop:4}}>{expanded?game.article.body:game.article.body.slice(0,130)+(game.article.body.length>130?”…”:””)}</div>
-{game.article.body.length>130&&<button onClick={()=>setExpanded(e=>!e)} style={{background:“none”,border:“none”,color:tc,fontSize:12,cursor:“pointer”,padding:“4px 0 0”,fontWeight:600}}>{expanded?“Show less ↑”:“Read more ↓”}</button>}
+{game.article.body.length>130&&<button onClick={()=>setExpanded(e=>!e)} style={{background:“none”,border:“none”,color:tc,fontSize:12,cursor:“pointer”,padding:“4px 0 0”,fontWeight:600}}>{expanded?“Show less”:“Read more”}</button>}
 </>}
 {!game.article&&<div style={{fontSize:12,color:”#aaa”,marginTop:4,fontStyle:“italic”}}>No recap available</div>}
 </div>
@@ -449,8 +448,8 @@ return <div>
 <div style={{width:10,height:32,borderRadius:3,background:t.color,flexShrink:0}}/>
 <span style={{flex:1,fontSize:14,fontWeight:500}}>{t.name}</span>
 <div style={{display:“flex”,flexDirection:“column”,gap:3}}>
-<button onClick={()=>onMoveTeam(tid,-1)} disabled={i===0} style={{background:i===0?”#f0f0f0”:”#f5f5f5”,border:“0.5px solid #ddd”,borderRadius:5,padding:“3px 8px”,cursor:i===0?“default”:“pointer”,fontSize:12,color:i===0?”#bbb”:”#444”,lineHeight:1}}>▲</button>
-<button onClick={()=>onMoveTeam(tid,1)} disabled={i===teamOrder.length-1} style={{background:i===teamOrder.length-1?”#f0f0f0”:”#f5f5f5”,border:“0.5px solid #ddd”,borderRadius:5,padding:“3px 8px”,cursor:i===teamOrder.length-1?“default”:“pointer”,fontSize:12,color:i===teamOrder.length-1?”#bbb”:”#444”,lineHeight:1}}>▼</button>
+<button onClick={()=>onMoveTeam(tid,-1)} disabled={i===0} style={{background:i===0?”#f0f0f0”:”#f5f5f5”,border:“0.5px solid #ddd”,borderRadius:5,padding:“3px 8px”,cursor:i===0?“default”:“pointer”,fontSize:12,color:i===0?”#bbb”:”#444”,lineHeight:1}}>up</button>
+<button onClick={()=>onMoveTeam(tid,1)} disabled={i===teamOrder.length-1} style={{background:i===teamOrder.length-1?”#f0f0f0”:”#f5f5f5”,border:“0.5px solid #ddd”,borderRadius:5,padding:“3px 8px”,cursor:i===teamOrder.length-1?“default”:“pointer”,fontSize:12,color:i===teamOrder.length-1?”#bbb”:”#444”,lineHeight:1}}>dn</button>
 </div>
 </div>
 );})}
@@ -471,7 +470,7 @@ return <div style={{background:”#fff”,border:“0.5px solid #ddd”,borderRa
 <div><div style={{fontSize:13,color:”#777”,marginBottom:6}}>New Password</div><input type=“password” style={s.input} placeholder=“Enter new password” value={newPw} onChange={e=>setNewPw(e.target.value)}/></div>
 <div><div style={{fontSize:13,color:”#777”,marginBottom:6}}>Confirm New Password</div><input type=“password” style={s.input} placeholder=“Re-enter new password” value={confirm} onChange={e=>setConfirm(e.target.value)}/></div>
 {error&&<div style={{fontSize:13,color:”#c41a1a”}}>{error}</div>}
-<button onClick={handleSave} style={{…s.btn,background:saved?”#1a7a3c”:”#f5f5f5”,border:“0.5px solid #ddd”,color:saved?”#fff”:”#222”}}>{saved?“Password Updated ✓”:“Update Password”}</button>
+<button onClick={handleSave} style={{…s.btn,background:saved?”#1a7a3c”:”#f5f5f5”,border:“0.5px solid #ddd”,color:saved?”#fff”:”#222”}}>{saved?“Password Updated”:“Update Password”}</button>
 </div>
 
   </div>;
@@ -493,228 +492,4 @@ return <div style={{...s.card,marginBottom:16}}>
 <span style={{fontWeight:600,fontSize:16,flex:1}}>{team.name}</span>
 {canDelete&&!confirmDelete&&<button onClick={()=>setConfirmDelete(true)} style={{…s.sec,fontSize:12,padding:“5px 10px”,color:”#c41a1a”,borderColor:”#c41a1a”}}>Delete Team</button>}
 {canDelete&&confirmDelete&&<div style={{display:“flex”,gap:6,alignItems:“center”}}>
-<span style={{fontSize:12,color:”#c41a1a”}}>Sure?</span>
-<button onClick={()=>onDeleteTeam(tid)} style={{background:”#c41a1a”,color:”#fff”,border:“none”,borderRadius:6,padding:“4px 10px”,cursor:“pointer”,fontSize:12,fontWeight:500}}>Yes</button>
-<button onClick={()=>setConfirmDelete(false)} style={{…s.sec,fontSize:12,padding:“4px 10px”}}>No</button>
-</div>}
-</div>
-<div style={{marginBottom:14}}>
-<div style={{fontSize:13,fontWeight:500,color:”#777”,marginBottom:8}}>Team Logo</div>
-<div style={{display:“flex”,alignItems:“center”,gap:12}}>
-<div style={{width:60,height:60,borderRadius:10,border:“2px dashed “+(logo?team.color:”#ccc”),background:”#f5f5f5”,display:“flex”,alignItems:“center”,justifyContent:“center”,overflow:“hidden”,flexShrink:0}}>
-{logo?<img src={logo} style={{width:“100%”,height:“100%”,objectFit:“contain”,padding:4}}/>:<span style={{fontSize:24,color:”#ccc”}}>+</span>}
-</div>
-<div>
-<button onClick={()=>logoRef.current.click()} style={{…s.btn,background:team.color,fontSize:13,padding:“7px 14px”}}>{logo?“Change Logo”:“Upload Logo”}</button>
-{logo&&<button onClick={()=>onSaveLogo(tid,null)} style={{…s.sec,fontSize:12,padding:“5px 10px”,marginLeft:8,color:”#c41a1a”,borderColor:”#c41a1a”}}>Remove</button>}
-<div style={{fontSize:11,color:”#aaa”,marginTop:5}}>PNG, JPG or SVG</div>
-</div>
-<input ref={logoRef} type=“file” accept=“image/*,.svg” style={{display:“none”}} onChange={handleLogoFile}/>
-</div>
-</div>
-<div style={{marginBottom:14}}>
-<div style={{fontSize:13,fontWeight:500,color:”#777”,marginBottom:8}}>Team Font</div>
-<div style={{display:“flex”,alignItems:“center”,gap:12}}>
-<div style={{width:60,height:60,borderRadius:10,border:“2px dashed “+(font?team.color:”#ccc”),background:”#f5f5f5”,display:“flex”,alignItems:“center”,justifyContent:“center”,flexShrink:0}}>
-<span style={{fontFamily:font?(”‘TeamFont_”+tid+”’, sans-serif”):“inherit”,fontSize:22,fontWeight:700,color:font?team.color:”#bbb”}}>Aa</span>
-</div>
-<div>
-<button onClick={()=>fontRef.current.click()} style={{…s.btn,background:team.color,fontSize:13,padding:“7px 14px”}}>{font?“Change Font”:“Upload Font”}</button>
-{font&&<button onClick={()=>onSaveFont(tid,null)} style={{…s.sec,fontSize:12,padding:“5px 10px”,marginLeft:8,color:”#c41a1a”,borderColor:”#c41a1a”}}>Remove</button>}
-<div style={{fontSize:11,color:”#aaa”,marginTop:5}}>.ttf or .otf file</div>
-</div>
-<input ref={fontRef} type=“file” accept=”.ttf,.otf,.woff,.woff2” style={{display:“none”}} onChange={handleFontFile}/>
-</div>
-</div>
-<div style={{marginBottom:14}}>
-<div style={{fontSize:13,fontWeight:500,color:”#777”,marginBottom:8}}>Team Color</div>
-<div style={{display:“flex”,gap:8,alignItems:“center”}}>
-<div style={{width:40,height:40,borderRadius:8,background:previewColor,border:“0.5px solid #ddd”,flexShrink:0}}/>
-<input style={{…s.input,flex:1,fontFamily:“monospace”}} value={color} placeholder=”#223E54” onChange={e=>setColor(e.target.value)}/>
-<button onClick={handleSaveColor} style={{…s.btn,background:team.color,whiteSpace:“nowrap”}}>{savedColor?“Saved ✓”:“Save”}</button>
-</div>
-{colorError&&<div style={{fontSize:12,color:”#c41a1a”,marginTop:6}}>Please enter a valid hex color (e.g. #223E54)</div>}
-</div>
-<div>
-<div style={{fontSize:13,fontWeight:500,color:”#777”,marginBottom:8}}>Team Name</div>
-<div style={{display:“flex”,gap:8}}>
-<input style={{…s.input,flex:1}} value={name} onChange={e=>setName(e.target.value)}/>
-<button onClick={handleSaveName} style={{…s.btn,background:team.color,whiteSpace:“nowrap”}}>{savedName?“Saved ✓”:“Save”}</button>
-</div>
-</div>
-
-  </div>;
-}
-
-function PhotoAvatar({photo,number,size,tc,pid,onSave}){
-const ref=useRef();
-function handleFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onSave(pid,ev.target.result);r.readAsDataURL(f);}
-return <div style={{position:“relative”,width:size,height:size,flexShrink:0,cursor:“pointer”}} onClick={()=>ref.current.click()}>
-{photo?<img src={photo} style={{width:size,height:size,borderRadius:“50%”,objectFit:“cover”,border:“2px solid rgba(255,255,255,0.4)”}}/>
-:<div style={{width:size,height:size,borderRadius:“50%”,background:“rgba(255,255,255,0.2)”,display:“flex”,alignItems:“center”,justifyContent:“center”,fontWeight:700,fontSize:size*0.3,color:”#fff”}}>{”#”+number}</div>}
-<div style={{position:“absolute”,bottom:0,right:0,width:20,height:20,borderRadius:“50%”,background:“rgba(0,0,0,0.5)”,display:“flex”,alignItems:“center”,justifyContent:“center”}}>
-<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-</div>
-<input ref={ref} type=“file” accept=“image/*” style={{display:“none”}} onChange={handleFile}/>
-
-  </div>;
-}
-
-function GameLog({games,isG,player,tc,s}){
-const [expanded,setExpanded]=useState(false);
-const allReversed=[…games].reverse();
-const displayed=expanded?allReversed:allReversed.slice(0,5);
-return <div style={{…s.card,marginBottom:14,padding:0,overflow:“hidden”}}>
-<div style={{background:tc,padding:“10px 16px”,display:“flex”,justifyContent:“space-between”,alignItems:“center”}}>
-<span style={{fontWeight:500,fontSize:15,color:”#fff”}}>Game Log</span>
-<span style={{fontSize:13,color:“rgba(255,255,255,0.8)”}}>{games.length+” game”+(games.length!==1?“s”:””)}</span>
-</div>
-{games.length===0?<div style={{padding:“14px 16px”,color:”#777”,fontSize:14}}>No games recorded yet.</div>:<>
-{displayed.map(g=>{const gs=isG?g.goalieStats?.[player.id]:g.skaterStats?.[player.id];if(!gs)return null;const resColor=g.result===“W”?”#1a7a3c”:g.result===“L”?”#c41a1a”:”#777”;
-return <div key={g.id} style={{display:“flex”,justifyContent:“space-between”,alignItems:“center”,padding:“9px 16px”,borderBottom:“0.5px solid #ddd”,fontSize:14}}>
-<div>
-<span style={{color:”#777”,fontSize:12}}>{g.date}</span>
-<span style={{marginLeft:8,fontWeight:500}}>{“vs “+g.opponent}</span>
-{g.result&&<span style={{marginLeft:8,fontWeight:600,color:resColor}}>{g.result+(g.score?” “+g.score:””)}</span>}
-{g.gameType&&g.gameType!==“Regular Season”&&<span style={{marginLeft:6,fontSize:11,color:tc}}>{g.gameType}</span>}
-</div>
-<span style={{color:”#777”,fontSize:13}}>{isG?(“W:”+(gs.W||0)+” L:”+(gs.L||0)+” GA:”+(gs.GA||0)):(“G:”+(gs.G||0)+” A:”+(gs.A||0)+” P:”+((gs.G||0)+(gs.A||0)))}</span>
-</div>;
-})}
-{games.length>5&&<button onClick={()=>setExpanded(e=>!e)} style={{width:“100%”,padding:“10px”,background:”#f5f5f5”,border:“none”,borderTop:“0.5px solid #ddd”,cursor:“pointer”,fontSize:13,color:tc,fontWeight:500}}>{expanded?“Show less ↑”:(“Show all “+games.length+” games ↓”)}</button>}
-</>}
-
-  </div>;
-}
-
-function PlayerModal({modal,onSave,onDelete,onClose,s,tc,teamSeasons}){
-const isEdit=modal.type===“editPlayer”;
-const allSeasons=teamSeasons.filter(sv=>sv!==“All Time”);
-const [form,setForm]=useState(isEdit?{…modal.player,activeSeasons:modal.player.activeSeasons||[…allSeasons]}:{name:””,number:””,position:“C”,activeSeasons:[…allSeasons]});
-const [confirmDelete,setConfirmDelete]=useState(false);
-const set=(k,v)=>setForm(f=>({…f,[k]:v}));
-function toggleSeason(sv){const cur=form.activeSeasons||[];set(“activeSeasons”,cur.includes(sv)?cur.filter(s=>s!==sv):[…cur,sv]);}
-return <div>
-<div style={{fontWeight:500,fontSize:17,marginBottom:16}}>{isEdit?“Edit Player”:“Add Player”}</div>
-<div style={{display:“flex”,flexDirection:“column”,gap:10}}>
-<input style={s.input} placeholder=“Full name” value={form.name} onChange={e=>set(“name”,e.target.value)}/>
-<input style={s.input} placeholder=“Jersey number” value={form.number} onChange={e=>set(“number”,e.target.value)}/>
-<select style={s.input} value={form.position} onChange={e=>set(“position”,e.target.value)}>{POSITIONS.map(p=><option key={p} value={p}>{p}</option>)}</select>
-<div>
-<div style={{fontSize:13,fontWeight:500,color:”#777”,marginBottom:8}}>Active Seasons</div>
-<div style={{display:“flex”,flexDirection:“column”,gap:6}}>
-{allSeasons.map(sv=>{const active=(form.activeSeasons||[]).includes(sv);return(
-<button key={sv} onClick={()=>toggleSeason(sv)} style={{display:“flex”,alignItems:“center”,gap:10,padding:“8px 12px”,borderRadius:8,border:active?“2px solid “+tc:“0.5px solid #ccc”,background:active?tc+“11”:”#fff”,cursor:“pointer”,textAlign:“left”}}>
-<div style={{width:18,height:18,borderRadius:4,border:“2px solid “+(active?tc:”#ccc”),background:active?tc:“transparent”,display:“flex”,alignItems:“center”,justifyContent:“center”,flexShrink:0}}>
-{active&&<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-</div>
-<span style={{fontSize:13,color:active?tc:”#222”,fontWeight:active?500:400}}>{sv}</span>
-</button>
-);})}
-</div>
-</div>
-</div>
-{confirmDelete&&<div style={{marginTop:14,background:”#fdecea”,border:“1px solid #c41a1a”,borderRadius:8,padding:“12px 14px”}}>
-<div style={{fontWeight:500,fontSize:14,color:”#c41a1a”,marginBottom:10}}>{“Delete “+form.name+”? This cannot be undone.”}</div>
-<div style={{display:“flex”,gap:8}}>
-<button style={{…s.sec,flex:1}} onClick={()=>setConfirmDelete(false)}>Cancel</button>
-<button style={{flex:1,background:”#c41a1a”,color:”#fff”,border:“none”,borderRadius:8,padding:“8px 14px”,cursor:“pointer”,fontSize:14,fontWeight:500}} onClick={()=>onDelete(form.id)}>Yes, Delete</button>
-</div>
-</div>}
-{!confirmDelete&&<div style={{display:“flex”,gap:8,marginTop:16}}>
-<button style={s.sec} onClick={onClose}>Cancel</button>
-{isEdit&&<button style={{…s.sec,color:”#c41a1a”,borderColor:”#c41a1a”}} onClick={()=>setConfirmDelete(true)}>Delete</button>}
-<button style={{…s.btn,flex:1}} onClick={()=>form.name&&onSave(form,isEdit)}>Save</button>
-</div>}
-
-  </div>;
-}
-
-function GameModal({modal,players,seasons,defaultSeason,onSave,onClose,s,tc}){
-const [date,setDate]=useState(new Date().toISOString().slice(0,10));
-const [opponent,setOpponent]=useState(””);
-const [score,setScore]=useState(””);
-const [result,setResult]=useState(“W”);
-const [gameSeason,setGameSeason]=useState(defaultSeason||seasons[0]);
-const [gameType,setGameType]=useState(“Regular Season”);
-const [skaterStats,setSkaterStats]=useState({});
-const [goalieStats,setGoalieStats]=useState({});
-const skaters=players.filter(p=>p.position!==“G”);
-const goalies=players.filter(p=>p.position===“G”);
-const setSS=(pid,k,v)=>setSkaterStats(prev=>({…prev,[pid]:{…prev[pid],[k]:parseInt(v)||0}}));
-const setGS=(pid,k,v)=>setGoalieStats(prev=>({…prev,[pid]:{…prev[pid],[k]:parseInt(v)||0}}));
-const si={…s.input,padding:“5px 6px”,fontSize:13,textAlign:“center”};
-return <div>
-<div style={{fontWeight:500,fontSize:17,marginBottom:16}}>Add Game</div>
-<div style={{display:“flex”,flexDirection:“column”,gap:10,marginBottom:16}}>
-<select style={s.input} value={gameSeason} onChange={e=>setGameSeason(e.target.value)}>{seasons.map(sv=><option key={sv} value={sv}>{sv}</option>)}</select>
-<select style={s.input} value={gameType} onChange={e=>setGameType(e.target.value)}>{GAME_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>
-<input type=“date” style={s.input} value={date} onChange={e=>setDate(e.target.value)}/>
-<input style={s.input} placeholder=“Opponent team name” value={opponent} onChange={e=>setOpponent(e.target.value)}/>
-<div style={{display:“flex”,gap:8}}>
-<input style={{…s.input,flex:1}} placeholder=“Score (e.g. 5-3)” value={score} onChange={e=>setScore(e.target.value)}/>
-<select style={{…s.input,width:“auto”}} value={result} onChange={e=>setResult(e.target.value)}>{[“W”,“L”,“T”,“OTL”].map(r=><option key={r} value={r}>{r}</option>)}</select>
-</div>
-</div>
-{skaters.length>0&&<div style={{marginBottom:14}}>
-<div style={{fontWeight:500,fontSize:14,marginBottom:8,color:”#777”}}>Skater Stats</div>
-<div style={{overflowX:“auto”}}>
-<table style={{width:“100%”,borderCollapse:“collapse”,minWidth:260}}>
-<thead><tr style={{background:”#f5f5f5”}}><th style={{padding:“6px 8px”,textAlign:“left”,fontSize:13}}>Player</th>{[“G”,“A”,“PIM”].map(c=><th key={c} style={{padding:“6px”,fontSize:13,textAlign:“center”}}>{c}</th>)}</tr></thead>
-<tbody>{skaters.map(p=><tr key={p.id} style={{borderBottom:“0.5px solid #ddd”}}>
-<td style={{padding:“6px 8px”,fontSize:13}}>{p.name}</td>
-{[“G”,“A”,“PIM”].map(c=><td key={c} style={{padding:4}}><input type=“number” min=“0” style={si} value={skaterStats[p.id]?.[c]??””} placeholder=“0” onChange={e=>setSS(p.id,c,e.target.value)}/></td>)}
-</tr>)}</tbody>
-</table>
-</div>
-</div>}
-{goalies.length>0&&<div style={{marginBottom:14}}>
-<div style={{fontWeight:500,fontSize:14,marginBottom:8,color:”#777”}}>Goalie Stats</div>
-<div style={{overflowX:“auto”}}>
-<table style={{width:“100%”,borderCollapse:“collapse”,minWidth:320}}>
-<thead><tr style={{background:”#f5f5f5”}}><th style={{padding:“6px 8px”,textAlign:“left”,fontSize:13}}>Player</th>{[“W”,“L”,“T”,“OTL”,“SO”,“GA”].map(c=><th key={c} style={{padding:“6px 4px”,fontSize:13,textAlign:“center”}}>{c}</th>)}</tr></thead>
-<tbody>{goalies.map(p=><tr key={p.id} style={{borderBottom:“0.5px solid #ddd”}}>
-<td style={{padding:“6px 8px”,fontSize:13}}>{p.name}</td>
-{[“W”,“L”,“T”,“OTL”,“SO”,“GA”].map(c=><td key={c} style={{padding:4}}><input type=“number” min=“0” style={si} value={goalieStats[p.id]?.[c]??””} placeholder=“0” onChange={e=>setGS(p.id,c,e.target.value)}/></td>)}
-</tr>)}</tbody>
-</table>
-</div>
-</div>}
-<div style={{display:“flex”,gap:8,marginTop:8}}>
-<button style={s.sec} onClick={onClose}>Cancel</button>
-<button style={{…s.btn,flex:1}} onClick={()=>opponent&&onSave({date,opponent,score,result,season:gameSeason,gameType,skaterStats,goalieStats})}>Save Game</button>
-</div>
-
-  </div>;
-}
-
-function EditStatsModal({modal,onSave,onClose,s,tc}){
-const {player}=modal, isG=player.position===“G”;
-const cols=isG?GOALIE_COLS.filter(c=>c!==“GAA”):SKATER_COLS.filter(c=>c!==“P”&&c!==“PPG”);
-const [vals,setVals]=useState({…modal.vals});
-const set=(k,v)=>setVals(prev=>({…prev,[k]:parseInt(v)||0}));
-return <div>
-<div style={{display:“flex”,alignItems:“center”,gap:10,marginBottom:4}}>
-<div style={{width:36,height:36,borderRadius:“50%”,background:tc,display:“flex”,alignItems:“center”,justifyContent:“center”,color:”#fff”,fontWeight:700,fontSize:13}}>{”#”+player.number}</div>
-<div><div style={{fontWeight:600,fontSize:16}}>{player.name}</div><div style={{fontSize:12,color:”#777”}}>Edit Stats Override</div></div>
-</div>
-<div style={{fontSize:12,color:”#777”,background:”#f5f5f5”,borderRadius:8,padding:“8px 12px”,marginBottom:16,borderLeft:“3px solid “+tc}}>These values override game-log totals for the selected season.</div>
-<div style={{display:“grid”,gridTemplateColumns:“repeat(3,1fr)”,gap:10}}>
-{cols.map(c=><div key={c} style={{background:”#f5f5f5”,borderRadius:10,padding:“10px 10px 8px”,border:“0.5px solid #ddd”}}>
-<div style={{fontSize:11,fontWeight:600,color:tc,marginBottom:6,textTransform:“uppercase”,letterSpacing:“0.05em”}}>{c}</div>
-<input type=“number” min=“0” style={{width:“100%”,padding:“6px 8px”,border:“1.5px solid “+tc+“55”,borderRadius:7,background:”#fff”,color:”#222”,fontSize:18,fontWeight:600,textAlign:“center”,boxSizing:“border-box”}} value={vals[c]??””} placeholder=“0” onChange={e=>set(c,e.target.value)}/>
-</div>)}
-</div>
-<div style={{display:“flex”,gap:8,marginTop:16}}>
-<button style={s.sec} onClick={onClose}>Cancel</button>
-<button style={{…s.btn,flex:1}} onClick={()=>onSave(player,vals)}>Save Stats</button>
-</div>
-
-  </div>;
-}
-
-ReactDOM.createRoot(document.getElementById(“root”)).render(<App/>);
-</script>
-
-</body>
-</html>
+<span
