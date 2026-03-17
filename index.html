@@ -35,7 +35,7 @@ function getTeamCfg(data,tid){const base=TEAMS_BASE[tid];const t=data.teams[tid]
 const initData=()=>({
   teams:{team1:{name:"High Life Hockey (D5)",color:"#223E54"},team2:{name:"Yetis (D6)",color:"#622B3C"}},
   players:{team1:[],team2:[]},games:{team1:[],team2:[]},
-  statOverrides:{},playerPhotos:{},teamLogos:{},teamFonts:{},adminPassword:"admin"
+  statOverrides:{},playerPhotos:{},teamLogos:{},teamFonts:{},adminPassword:"admin",gallery:{}
 });
 function computeStats(player,games,overrides,season,teamSeasons){
   const isG=player.position==="G";
@@ -54,13 +54,61 @@ function getRecord(games,season){
   return{W,L,T,OTL,GP:f.length};
 }
 
+function GalleryPage({gallery,activeTeam,season,seasons,tc,s,onAdd,onOpenLightbox}){
+  const fileRef=useRef();
+  const allSeasons=seasons.filter(sv=>sv!=="All Time");
+  const uploadSeason=season==="All Time"?allSeasons[0]:season;
+  const teamGallery=gallery[activeTeam]||{};
+  let photos=[];
+  if(season==="All Time"){
+    allSeasons.forEach(sv=>(teamGallery[sv]||[]).forEach(p=>photos.push({...p,seasonKey:sv,seasonLabel:sv})));
+    photos.sort((a,b)=>new Date(b.uploadedAt)-new Date(a.uploadedAt));
+  } else {
+    (teamGallery[season]||[]).forEach(p=>photos.push({...p,seasonKey:season,seasonLabel:null}));
+    photos.sort((a,b)=>new Date(b.uploadedAt)-new Date(a.uploadedAt));
+  }
+  function handleFiles(e){
+    Array.from(e.target.files).forEach(f=>{const r=new FileReader();r.onload=ev=>onAdd(uploadSeason,ev.target.result);r.readAsDataURL(f);});
+    e.target.value="";
+  }
+  return <div>
+    <div style={{background:"#fff",border:"2px dashed "+tc+"55",borderRadius:12,padding:16,marginBottom:16,textAlign:"center"}}>
+      <div style={{fontSize:13,color:"#777",marginBottom:10}}>{season==="All Time"?"Uploading to: ":"Season: "}<span style={{fontWeight:600,color:tc}}>{uploadSeason}</span></div>
+      <input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}} onChange={handleFiles}/>
+      <button onClick={()=>fileRef.current.click()} style={{...s.btn,background:tc,fontSize:14,padding:"10px 22px"}}>📷 Upload Photos</button>
+      <div style={{fontSize:11,color:"#bbb",marginTop:8}}>JPG, PNG · Multiple allowed</div>
+    </div>
+    {photos.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"#aaa",fontSize:14}}>No photos yet for {season}.<br/>Be the first to upload one!</div>}
+    {photos.length>0&&<div style={{columns:"2 140px",columnGap:8}}>
+      {photos.map(photo=>(
+        <div key={photo.id} onClick={()=>onOpenLightbox(photo)} style={{breakInside:"avoid",marginBottom:8,position:"relative",borderRadius:10,overflow:"hidden",cursor:"pointer",border:"0.5px solid #ddd"}}>
+          <img src={photo.url} alt="" style={{width:"100%",display:"block",borderRadius:10}}/>
+          {photo.seasonLabel&&<div style={{position:"absolute",top:6,left:6,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:20,maxWidth:"calc(100% - 12px)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{photo.seasonLabel}</div>}
+        </div>
+      ))}
+    </div>}
+  </div>;
+}
+
+function Lightbox({photo,tc,isAdmin,onDelete,onClose}){
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:1000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div style={{position:"absolute",top:16,right:16,display:"flex",gap:10}}>
+      {isAdmin&&<button onClick={e=>{e.stopPropagation();onDelete();}} style={{background:"rgba(196,26,26,0.85)",border:"none",color:"#fff",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:13,fontWeight:600}}>Delete</button>}
+      <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:20,lineHeight:1}}>×</button>
+    </div>
+    <img src={photo.url} alt="" onClick={e=>e.stopPropagation()} style={{maxWidth:"100%",maxHeight:"80vh",borderRadius:12,objectFit:"contain"}}/>
+    {photo.seasonLabel&&<div style={{marginTop:12,color:"rgba(255,255,255,0.55)",fontSize:12,textAlign:"center"}}>{photo.seasonLabel}</div>}
+    {!isAdmin&&<div style={{marginTop:14,background:"rgba(255,255,255,0.1)",borderRadius:8,padding:"6px 14px",color:"rgba(255,255,255,0.5)",fontSize:12}}>Admin login required to delete photos</div>}
+  </div>;
+}
+
 function App(){
   const [data,setData]=useState(()=>{
     try{
       const raw=localStorage.getItem("hockeyApp2");
       const d=raw?JSON.parse(raw):initData();
       if(!raw){d.teams.team1.name="High Life Hockey (D5)";d.teams.team2.name="Yetis (D6)";d.teams.team1.color="#223E54";d.teams.team2.color="#622B3C";}
-      if(!d.teamLogos)d.teamLogos={};if(!d.playerPhotos)d.playerPhotos={};if(!d.teamFonts)d.teamFonts={};if(!d.adminPassword)d.adminPassword="admin";
+      if(!d.teamLogos)d.teamLogos={};if(!d.playerPhotos)d.playerPhotos={};if(!d.teamFonts)d.teamFonts={};if(!d.adminPassword)d.adminPassword="admin";if(!d.gallery)d.gallery={};
       Object.keys(d.teams).forEach(tid=>{const cfg=getTeamCfg(d,tid);(d.players[tid]||[]).forEach(p=>{if(!p.activeSeasons)p.activeSeasons=[...cfg.seasons.filter(s=>s!=="All Time")];});});
       localStorage.setItem("hockeyApp2",JSON.stringify(d));return d;
     }catch{return initData();}
@@ -73,6 +121,7 @@ function App(){
   const [sortDir,setSortDir]=useState(-1);
   const [modal,setModal]=useState(null);
   const [isAdmin,setIsAdmin]=useState(false);
+  const [lightbox,setLightbox]=useState(null);
 
   const save=d=>{setData(d);try{localStorage.setItem("hockeyApp2",JSON.stringify(d));}catch{}};
   const teamCfg=getTeamCfg(data,activeTeam);
@@ -113,6 +162,8 @@ function App(){
   function saveAdminPassword(newPw){const d=JSON.parse(JSON.stringify(data));d.adminPassword=newPw;save(d);}
   function addTeam(){const d=JSON.parse(JSON.stringify(data));const tid="team"+Date.now();d.teams[tid]={name:"New Team",color:"#444444"};d.players[tid]=[];d.games[tid]=[];save(d);setActiveTeam(tid);setSeason("Winter 2025-2026");setPage("settings");setModal(null);}
   function deleteTeam(tid){const d=JSON.parse(JSON.stringify(data));delete d.teams[tid];delete d.players[tid];delete d.games[tid];if(d.teamLogos)delete d.teamLogos[tid];if(d.teamFonts)delete d.teamFonts[tid];save(d);setActiveTeam("team1");setSeason(getTeamCfg(d,"team1").seasons[1]);setPage("home");}
+  function addGalleryPhoto(seasonKey,url){const d=JSON.parse(JSON.stringify(data));if(!d.gallery[activeTeam])d.gallery[activeTeam]={};if(!d.gallery[activeTeam][seasonKey])d.gallery[activeTeam][seasonKey]=[];d.gallery[activeTeam][seasonKey].push({id:"gi"+Date.now(),url,uploadedAt:new Date().toISOString()});save(d);}
+  function deleteGalleryPhoto(seasonKey,photoId){const d=JSON.parse(JSON.stringify(data));if(d.gallery[activeTeam]&&d.gallery[activeTeam][seasonKey]){d.gallery[activeTeam][seasonKey]=d.gallery[activeTeam][seasonKey].filter(p=>p.id!==photoId);}save(d);setLightbox(null);}
 
   const record=getRecord(games,season);
   const playerInView=selectedPlayer?players.find(p=>p.id===selectedPlayer.id)||selectedPlayer:null;
@@ -131,7 +182,6 @@ function App(){
   return (
     <div style={{maxWidth:600,margin:"0 auto",fontFamily:fontStyle,background:"#f0f0f0",borderRadius:14,padding:"16px 14px 40px"}}>
       <style>{fontFaceCSS}</style>
-      {/* Team Toggle */}
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
         {Object.entries(data.teams).map(([tid,t])=>{const active=activeTeam===tid,logo=teamLogos[tid];return(
           <button key={tid} onClick={()=>{setActiveTeam(tid);setSelectedPlayer(null);setPage("home");setSeason(getTeamCfg(data,tid).seasons[1]||getTeamCfg(data,tid).seasons[0]);setModal(null);}}
@@ -142,9 +192,7 @@ function App(){
         );})}
         <button onClick={()=>requireAdmin(addTeam)} style={{padding:"8px 12px",borderRadius:10,border:"2px dashed #ccc",background:"#fff",color:"#777",cursor:"pointer",fontSize:13,fontWeight:500,whiteSpace:"nowrap"}}>+ Add Team</button>
       </div>
-      {/* Season */}
       <div style={{marginBottom:14}}><select value={season} onChange={e=>setSeason(e.target.value)} style={s.input}>{seasons.map(sv=><option key={sv} value={sv}>{sv}</option>)}</select></div>
-      {/* Header */}
       <div style={{background:tc,color:"#fff",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderRadius:"10px 10px 0 0"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           {teamLogos[activeTeam]&&<img src={teamLogos[activeTeam]} alt="" style={{width:36,height:36,objectFit:"contain",flexShrink:0}}/>}
@@ -153,18 +201,16 @@ function App(){
         {record.GP>0&&season!=="All Time"&&<span style={{fontSize:13,background:"rgba(255,255,255,0.15)",borderRadius:20,padding:"3px 10px",fontWeight:500}}>{record.W+"-"+record.L+(record.T>0?"-"+record.T:"")+(record.OTL>0?" OTL:"+record.OTL:"")}</span>}
         <span style={{fontSize:12,opacity:0.85}}>{season}</span>
       </div>
-      {/* Nav */}
       <div style={{display:"flex",borderBottom:"2px solid #ddd",marginBottom:16,overflowX:"auto"}}>
-        {["home","roster","stats","games","settings"].map(p=>(
+        {["home","roster","stats","games","gallery","settings"].map(p=>(
           <button key={p} onClick={()=>{if(p==="settings"){requireAdmin(()=>{setPage("settings");setSelectedPlayer(null);setModal(null);});return;}setPage(p);setSelectedPlayer(null);setModal(null);}}
-            style={{flex:1,padding:"10px 2px",background:(page===p&&!selectedPlayer)?tc:"#fff",color:(page===p&&!selectedPlayer)?"#fff":"#777",border:"none",cursor:"pointer",fontWeight:(page===p&&!selectedPlayer)?500:400,fontSize:12,borderBottom:(page===p&&!selectedPlayer)?"2px solid "+tc:"2px solid #ddd",whiteSpace:"nowrap",minWidth:50}}>
+            style={{flex:1,padding:"10px 2px",background:(page===p&&!selectedPlayer)?tc:"#fff",color:(page===p&&!selectedPlayer)?"#fff":"#777",border:"none",cursor:"pointer",fontWeight:(page===p&&!selectedPlayer)?500:400,fontSize:11,borderBottom:(page===p&&!selectedPlayer)?"2px solid "+tc:"2px solid #ddd",whiteSpace:"nowrap",minWidth:44}}>
             {p.charAt(0).toUpperCase()+p.slice(1)}
           </button>
         ))}
-        {selectedPlayer&&<button style={{flex:1,padding:"10px 4px",background:tc,color:"#fff",border:"none",cursor:"pointer",fontWeight:500,fontSize:12,borderBottom:"2px solid "+tc}}>Profile</button>}
+        {selectedPlayer&&<button style={{flex:1,padding:"10px 4px",background:tc,color:"#fff",border:"none",cursor:"pointer",fontWeight:500,fontSize:11,borderBottom:"2px solid "+tc}}>Profile</button>}
       </div>
 
-      {/* Home */}
       {!selectedPlayer&&page==="home"&&(
         <div>
           <div style={{fontWeight:500,fontSize:15,marginBottom:14,color:"#777"}}>Game Recaps</div>
@@ -177,7 +223,10 @@ function App(){
         </div>
       )}
 
-      {/* Player Profile */}
+      {!selectedPlayer&&page==="gallery"&&(
+        <GalleryPage gallery={data.gallery} activeTeam={activeTeam} season={season} seasons={seasons} tc={tc} s={s} onAdd={addGalleryPhoto} onOpenLightbox={setLightbox}/>
+      )}
+
       {selectedPlayer&&playerInView&&(()=>{
         const p=playerInView,st=getStats(p),isG=p.position==="G";
         const career=computeStats(p,games,data.statOverrides,"All Time",seasons);
@@ -329,6 +378,8 @@ function App(){
         {modal.type==="addGame"&&<GameModal modal={modal} players={activePlayers} seasons={seasons.filter(sv=>sv!=="All Time")} defaultSeason={season!=="All Time"?season:seasons[1]} onSave={saveGame} onClose={()=>setModal(null)} s={s} tc={tc}/>}
         {modal.type==="editStats"&&<EditStatsModal modal={modal} onSave={saveStatOverride} onClose={()=>setModal(null)} s={s} tc={tc}/>}
       </div>}
+
+      {lightbox&&<Lightbox photo={lightbox} tc={tc} isAdmin={isAdmin} onDelete={()=>requireAdmin(()=>deleteGalleryPhoto(lightbox.seasonKey,lightbox.id))} onClose={()=>setLightbox(null)}/>}
     </div>
   );
 }
