@@ -35,7 +35,7 @@ function getTeamCfg(data,tid){const base=TEAMS_BASE[tid];const t=data.teams[tid]
 const initData=()=>({
   teams:{team1:{name:"High Life Hockey (D5)",color:"#223E54"},team2:{name:"Yetis (D6)",color:"#622B3C"}},
   players:{team1:[],team2:[]},games:{team1:[],team2:[]},
-  statOverrides:{},playerPhotos:{},teamLogos:{},teamFonts:{},adminPassword:"admin",gallery:{}
+  statOverrides:{},playerPhotos:{},teamLogos:{},teamFonts:{},adminPassword:"admin",gallery:{},teamOrder:["team1","team2"]
 });
 function computeStats(player,games,overrides,season,teamSeasons){
   const isG=player.position==="G";
@@ -108,7 +108,12 @@ function App(){
       const raw=localStorage.getItem("hockeyApp2");
       const d=raw?JSON.parse(raw):initData();
       if(!raw){d.teams.team1.name="High Life Hockey (D5)";d.teams.team2.name="Yetis (D6)";d.teams.team1.color="#223E54";d.teams.team2.color="#622B3C";}
-      if(!d.teamLogos)d.teamLogos={};if(!d.playerPhotos)d.playerPhotos={};if(!d.teamFonts)d.teamFonts={};if(!d.adminPassword)d.adminPassword="admin";if(!d.gallery)d.gallery={};
+      if(!d.teamLogos)d.teamLogos={};
+      if(!d.playerPhotos)d.playerPhotos={};
+      if(!d.teamFonts)d.teamFonts={};
+      if(!d.adminPassword)d.adminPassword="admin";
+      if(!d.gallery)d.gallery={};
+      if(!d.teamOrder)d.teamOrder=Object.keys(d.teams);
       Object.keys(d.teams).forEach(tid=>{const cfg=getTeamCfg(d,tid);(d.players[tid]||[]).forEach(p=>{if(!p.activeSeasons)p.activeSeasons=[...cfg.seasons.filter(s=>s!=="All Time")];});});
       localStorage.setItem("hockeyApp2",JSON.stringify(d));return d;
     }catch{return initData();}
@@ -138,6 +143,7 @@ function App(){
   const goalies=activePlayers.filter(p=>p.position==="G");
   const getStats=p=>computeStats(p,games,data.statOverrides,season,seasons);
   const sortPlayers=arr=>[...arr].sort((a,b)=>(parseFloat(getStats(b)[sortCol])||0)-(parseFloat(getStats(a)[sortCol])||0));
+  const teamOrder=(data.teamOrder||Object.keys(data.teams)).filter(tid=>data.teams[tid]);
   function requireAdmin(fn){if(isAdmin){fn();return;}setModal({type:"adminLogin",onSuccess:fn});}
 
   const s={
@@ -160,10 +166,11 @@ function App(){
   function saveTeamName(tid,name){const d=JSON.parse(JSON.stringify(data));d.teams[tid].name=name;save(d);}
   function saveTeamColor(tid,color){const d=JSON.parse(JSON.stringify(data));d.teams[tid].color=color;save(d);}
   function saveAdminPassword(newPw){const d=JSON.parse(JSON.stringify(data));d.adminPassword=newPw;save(d);}
-  function addTeam(){const d=JSON.parse(JSON.stringify(data));const tid="team"+Date.now();d.teams[tid]={name:"New Team",color:"#444444"};d.players[tid]=[];d.games[tid]=[];save(d);setActiveTeam(tid);setSeason("Winter 2025-2026");setPage("settings");setModal(null);}
-  function deleteTeam(tid){const d=JSON.parse(JSON.stringify(data));delete d.teams[tid];delete d.players[tid];delete d.games[tid];if(d.teamLogos)delete d.teamLogos[tid];if(d.teamFonts)delete d.teamFonts[tid];save(d);setActiveTeam("team1");setSeason(getTeamCfg(d,"team1").seasons[1]);setPage("home");}
+  function addTeam(){const d=JSON.parse(JSON.stringify(data));const tid="team"+Date.now();d.teams[tid]={name:"New Team",color:"#444444"};d.players[tid]=[];d.games[tid]=[];if(!d.teamOrder)d.teamOrder=Object.keys(d.teams);d.teamOrder.push(tid);save(d);setActiveTeam(tid);setSeason("Winter 2025-2026");setPage("settings");setModal(null);}
+  function deleteTeam(tid){const d=JSON.parse(JSON.stringify(data));delete d.teams[tid];delete d.players[tid];delete d.games[tid];if(d.teamLogos)delete d.teamLogos[tid];if(d.teamFonts)delete d.teamFonts[tid];if(d.teamOrder)d.teamOrder=d.teamOrder.filter(id=>id!==tid);save(d);setActiveTeam("team1");setSeason(getTeamCfg(d,"team1").seasons[1]);setPage("home");}
   function addGalleryPhoto(seasonKey,url){const d=JSON.parse(JSON.stringify(data));if(!d.gallery[activeTeam])d.gallery[activeTeam]={};if(!d.gallery[activeTeam][seasonKey])d.gallery[activeTeam][seasonKey]=[];d.gallery[activeTeam][seasonKey].push({id:"gi"+Date.now(),url,uploadedAt:new Date().toISOString()});save(d);}
   function deleteGalleryPhoto(seasonKey,photoId){const d=JSON.parse(JSON.stringify(data));if(d.gallery[activeTeam]&&d.gallery[activeTeam][seasonKey]){d.gallery[activeTeam][seasonKey]=d.gallery[activeTeam][seasonKey].filter(p=>p.id!==photoId);}save(d);setLightbox(null);}
+  function moveTeam(tid,dir){const d=JSON.parse(JSON.stringify(data));const order=[...(d.teamOrder||Object.keys(d.teams))];const i=order.indexOf(tid);const ni=i+dir;if(ni<0||ni>=order.length)return;[order[i],order[ni]]=[order[ni],order[i]];d.teamOrder=order;save(d);}
 
   const record=getRecord(games,season);
   const playerInView=selectedPlayer?players.find(p=>p.id===selectedPlayer.id)||selectedPlayer:null;
@@ -183,7 +190,7 @@ function App(){
     <div style={{maxWidth:600,margin:"0 auto",fontFamily:fontStyle,background:"#f0f0f0",borderRadius:14,padding:"16px 14px 40px"}}>
       <style>{fontFaceCSS}</style>
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-        {Object.entries(data.teams).map(([tid,t])=>{const active=activeTeam===tid,logo=teamLogos[tid];return(
+        {teamOrder.map(tid=>{const t=data.teams[tid],active=activeTeam===tid,logo=teamLogos[tid];return(
           <button key={tid} onClick={()=>{setActiveTeam(tid);setSelectedPlayer(null);setPage("home");setSeason(getTeamCfg(data,tid).seasons[1]||getTeamCfg(data,tid).seasons[0]);setModal(null);}}
             style={{flex:1,minWidth:120,padding:"8px 6px",borderRadius:10,border:"2px solid "+(active?t.color:"#ccc"),background:active?t.color:"#fff",color:active?"#fff":"#222",fontWeight:500,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
             {logo&&<img src={logo} alt="" style={{width:26,height:26,objectFit:"contain",borderRadius:4,flexShrink:0}}/>}
@@ -283,7 +290,7 @@ function App(){
         </div>;
       })()}
 
-      {!selectedPlayer&&page==="settings"&&<SettingsPage data={data} teamLogos={teamLogos} teamFonts={teamFonts} onSaveLogo={saveTeamLogo} onSaveFont={saveTeamFont} onSaveName={saveTeamName} onSaveColor={saveTeamColor} onDeleteTeam={deleteTeam} onSavePassword={saveAdminPassword} s={s}/>}
+      {!selectedPlayer&&page==="settings"&&<SettingsPage data={data} teamLogos={teamLogos} teamFonts={teamFonts} teamOrder={teamOrder} onMoveTeam={moveTeam} onSaveLogo={saveTeamLogo} onSaveFont={saveTeamFont} onSaveName={saveTeamName} onSaveColor={saveTeamColor} onDeleteTeam={deleteTeam} onSavePassword={saveAdminPassword} s={s}/>}
 
       {!selectedPlayer&&page==="roster"&&<div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -424,10 +431,23 @@ function AdminLoginModal({onSuccess,onClose,s,tc,adminPassword}){
   </div>;
 }
 
-function SettingsPage({data,teamLogos,teamFonts,onSaveLogo,onSaveFont,onSaveName,onSaveColor,onDeleteTeam,onSavePassword,s}){
+function SettingsPage({data,teamLogos,teamFonts,teamOrder,onMoveTeam,onSaveLogo,onSaveFont,onSaveName,onSaveColor,onDeleteTeam,onSavePassword,s}){
   return <div>
     <div style={{fontWeight:500,fontSize:15,marginBottom:14,color:"#777"}}>Team Settings</div>
-    {Object.entries(data.teams).map(([tid,t])=><TeamSettingsCard key={tid} tid={tid} team={t} logo={teamLogos[tid]} font={teamFonts[tid]} onSaveLogo={onSaveLogo} onSaveFont={onSaveFont} onSaveName={onSaveName} onSaveColor={onSaveColor} canDelete={!BUILT_IN_TEAMS.includes(tid)} onDeleteTeam={onDeleteTeam} s={s}/>)}
+    {teamOrder.length>1&&<div style={{background:"#fff",border:"0.5px solid #ddd",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+      <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>Team Order</div>
+      {teamOrder.map((tid,i)=>{const t=data.teams[tid];return(
+        <div key={tid} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<teamOrder.length-1?"0.5px solid #eee":"none"}}>
+          <div style={{width:10,height:32,borderRadius:3,background:t.color,flexShrink:0}}/>
+          <span style={{flex:1,fontSize:14,fontWeight:500}}>{t.name}</span>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            <button onClick={()=>onMoveTeam(tid,-1)} disabled={i===0} style={{background:i===0?"#f0f0f0":"#f5f5f5",border:"0.5px solid #ddd",borderRadius:5,padding:"3px 8px",cursor:i===0?"default":"pointer",fontSize:12,color:i===0?"#bbb":"#444",lineHeight:1}}>▲</button>
+            <button onClick={()=>onMoveTeam(tid,1)} disabled={i===teamOrder.length-1} style={{background:i===teamOrder.length-1?"#f0f0f0":"#f5f5f5",border:"0.5px solid #ddd",borderRadius:5,padding:"3px 8px",cursor:i===teamOrder.length-1?"default":"pointer",fontSize:12,color:i===teamOrder.length-1?"#bbb":"#444",lineHeight:1}}>▼</button>
+          </div>
+        </div>
+      );})}
+    </div>}
+    {teamOrder.map(tid=><TeamSettingsCard key={tid} tid={tid} team={data.teams[tid]} logo={teamLogos[tid]} font={teamFonts[tid]} onSaveLogo={onSaveLogo} onSaveFont={onSaveFont} onSaveName={onSaveName} onSaveColor={onSaveColor} canDelete={!BUILT_IN_TEAMS.includes(tid)} onDeleteTeam={onDeleteTeam} s={s}/>)}
     <PasswordCard onSavePassword={onSavePassword} s={s}/>
   </div>;
 }
