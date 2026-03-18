@@ -552,8 +552,10 @@ function App() {
   const skaters = activePlayers.filter(p=>p.position!=="G");
   const goalies = activePlayers.filter(p=>p.position==="G");
   const getStats = p=>computeStats(p,games,data.statOverrides,season,seasons);
-  const sortSkaters = arr=>[...arr].sort((a,b)=>(parseFloat(getStats(b)[sortCol])||0)-(parseFloat(getStats(a)[sortCol])||0));
-  const sortGoalies = arr=>[...arr].sort((a,b)=>(parseFloat(getStats(b)["W"])||0)-(parseFloat(getStats(a)["W"])||0));
+  const statsCache = {};
+  const getCachedStats = p=>{if(!statsCache[p.id])statsCache[p.id]=computeStats(p,games,data.statOverrides,season,seasons);return statsCache[p.id];};
+  const sortSkaters = arr=>[...arr].sort((a,b)=>(parseFloat(getCachedStats(b)[sortCol])||0)-(parseFloat(getCachedStats(a)[sortCol])||0));
+  const sortGoalies = arr=>[...arr].sort((a,b)=>(parseFloat(getCachedStats(b)["W"])||0)-(parseFloat(getCachedStats(a)["W"])||0));
   const teamOrder = (data.teamOrder||Object.keys(data.teams)).filter(tid=>data.teams[tid]);
   function requireAdmin(fn){if(isAdmin){fn();return;}setModal({type:"adminLogin",onSuccess:fn});}
 
@@ -699,7 +701,7 @@ function App() {
                   <th style={{...s.th("",false),textAlign:"left",paddingLeft:10}}>Player</th>
                   {SKATER_COLS.map(c=><th key={c} style={s.th(c,sortCol===c)} onClick={()=>{setSortCol(c);setSortDir(sortCol===c?-sortDir:-1);}}>{c}{sortCol===c?(sortDir<0?"↓":"↑"):""}</th>)}
                 </tr></thead>
-                <tbody>{sortSkaters(skaters).map(p=>{const st=getStats(p);return(
+                <tbody>{sortSkaters(skaters).map(p=>{const st=getCachedStats(p);return(
                   <tr key={p.id} onClick={()=>{setSelectedPlayer(p);setModal(null);}} style={{cursor:"pointer",borderBottom:"0.5px solid #ddd"}}>
                     <td style={{...s.td,textAlign:"left",paddingLeft:10}}><span style={{fontWeight:500}}>{p.name}</span><span style={{fontSize:11,color:"#777",marginLeft:5}}>{"#"+p.number}</span></td>
                     {SKATER_COLS.map(c=><td key={c} style={{...s.td,fontWeight:c==="P"?600:400,color:c==="P"?tc:"#222"}}>{st[c]}</td>)}
@@ -716,7 +718,7 @@ function App() {
                   <th style={{...s.th("",false),textAlign:"left",paddingLeft:10}}>Player</th>
                   {GOALIE_COLS.map(c=><th key={c} style={s.th(c,sortCol===c)} onClick={()=>{setSortCol(c);setSortDir(sortCol===c?-sortDir:-1);}}>{c}{sortCol===c?(sortDir<0?"↓":"↑"):""}</th>)}
                 </tr></thead>
-                <tbody>{sortGoalies(goalies).map(p=>{const st=getStats(p);return(
+                <tbody>{sortGoalies(goalies).map(p=>{const st=getCachedStats(p);return(
                   <tr key={p.id} onClick={()=>{setSelectedPlayer(p);setModal(null);}} style={{cursor:"pointer",borderBottom:"0.5px solid #ddd"}}>
                     <td style={{...s.td,textAlign:"left",paddingLeft:10}}><span style={{fontWeight:500}}>{p.name}</span><span style={{fontSize:11,color:"#777",marginLeft:5}}>{"#"+p.number}</span></td>
                     {GOALIE_COLS.map(c=><td key={c} style={{...s.td,fontWeight:c==="W"?600:400,color:c==="W"?tc:"#222"}}>{st[c]}</td>)}
