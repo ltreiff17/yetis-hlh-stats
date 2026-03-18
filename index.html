@@ -51,34 +51,71 @@ function computeStats(player, games, overrides, season, teamSeasons) {
     const all = [...new Set(teamSeasons)].filter(s => s !== "All Time");
     if (isG) {
       let t = {GP:0,W:0,L:0,T:0,OTL:0,SO:0,GA:0};
-      all.forEach(sv => { const st = computeStats(player,games,overrides,sv,teamSeasons); if(st.GP>0){t.GP+=st.GP;t.W+=st.W;t.L+=st.L;t.T+=st.T;t.OTL+=st.OTL;t.SO+=st.SO;t.GA+=st.GA;} });
-      t.GAA = t.GP>0?(t.GA/t.GP).toFixed(2):"0.00"; return t;
+      all.forEach(sv => {
+        const st = computeStats(player,games,overrides,sv,teamSeasons);
+        if(st.GP>0){t.GP+=st.GP;t.W+=st.W;t.L+=st.L;t.T+=st.T;t.OTL+=st.OTL;t.SO+=st.SO;t.GA+=st.GA;}
+      });
+      t.GAA = t.GP>0?(t.GA/t.GP).toFixed(2):"0.00";
+      return t;
     } else {
       let t = {GP:0,G:0,A:0,PIM:0};
-      all.forEach(sv => { const st = computeStats(player,games,overrides,sv,teamSeasons); if(st.GP>0){t.GP+=st.GP;t.G+=st.G;t.A+=st.A;t.PIM+=st.PIM;} });
-      t.P=t.G+t.A; t.PPG=t.GP>0?(t.P/t.GP).toFixed(2):"0.00"; return t;
+      all.forEach(sv => {
+        const st = computeStats(player,games,overrides,sv,teamSeasons);
+        if(st.GP>0){t.GP+=st.GP;t.G+=st.G;t.A+=st.A;t.PIM+=st.PIM;}
+      });
+      t.P=t.G+t.A; t.PPG=t.GP>0?(t.P/t.GP).toFixed(2):"0.00";
+      return t;
     }
   }
   const fg = games.filter(g => g.season===season);
   const ov = overrides[player.id+"_"+season]||{};
   if (isG) {
     let b = {GP:0,W:0,L:0,T:0,OTL:0,SO:0,GA:0};
-    fg.forEach(g => { const s=g.goalieStats?.[player.id]; if(s){b.GP++;b.W+=s.W||0;b.L+=s.L||0;b.T+=s.T||0;b.OTL+=s.OTL||0;b.SO+=s.SO||0;b.GA+=s.GA||0;} });
-    if(Object.keys(ov).length>0) ["GP","W","L","T","OTL","SO","GA"].forEach(k=>{if(ov[k]!==undefined)b[k]=ov[k];});
-    b.GAA=b.GP>0?(b.GA/b.GP).toFixed(2):"0.00"; return b;
+    fg.forEach(g => {const s=g.goalieStats?.[player.id];if(s){b.GP++;b.W+=s.W||0;b.L+=s.L||0;b.T+=s.T||0;b.OTL+=s.OTL||0;b.SO+=s.SO||0;b.GA+=s.GA||0;}});
+    if(Object.keys(ov).length>0)["GP","W","L","T","OTL","SO","GA"].forEach(k=>{if(ov[k]!==undefined)b[k]=ov[k];});
+    b.GAA=b.GP>0?(b.GA/b.GP).toFixed(2):"0.00";
+    return b;
   } else {
     let b = {GP:0,G:0,A:0,PIM:0};
-    fg.forEach(g => { const s=g.skaterStats?.[player.id]; if(s){b.GP++;b.G+=s.G||0;b.A+=s.A||0;b.PIM+=s.PIM||0;} });
-    if(Object.keys(ov).length>0) ["GP","G","A","PIM"].forEach(k=>{if(ov[k]!==undefined)b[k]=ov[k];});
-    b.P=b.G+b.A; b.PPG=b.GP>0?(b.P/b.GP).toFixed(2):"0.00"; return b;
+    fg.forEach(g => {const s=g.skaterStats?.[player.id];if(s){b.GP++;b.G+=s.G||0;b.A+=s.A||0;b.PIM+=s.PIM||0;}});
+    if(Object.keys(ov).length>0)["GP","G","A","PIM"].forEach(k=>{if(ov[k]!==undefined)b[k]=ov[k];});
+    b.P=b.G+b.A; b.PPG=b.GP>0?(b.P/b.GP).toFixed(2):"0.00";
+    return b;
   }
 }
 
 function getRecord(games, season) {
   const f = season==="All Time"?games:games.filter(g=>g.season===season);
   let W=0,L=0,T=0,OTL=0;
-  f.forEach(g => { const r=(g.result||"").toUpperCase(); if(r==="W")W++;else if(r==="L")L++;else if(r==="T")T++;else if(r==="OTL")OTL++; });
+  f.forEach(g=>{const r=(g.result||"").toUpperCase();if(r==="W")W++;else if(r==="L")L++;else if(r==="T")T++;else if(r==="OTL")OTL++;});
   return {W,L,T,OTL,GP:f.length};
+}
+
+function ArticleCard({game,tc,logo}) {
+  const [expanded,setExpanded] = useState(false);
+  const resColor = game.result==="W"?"#1a7a3c":game.result==="L"?"#c41a1a":game.result==="OTL"?"#b06000":"#777";
+  const resBg = game.result==="W"?"#e8f5ee":game.result==="L"?"#fdecea":game.result==="OTL"?"#fff3e0":"#f5f5f5";
+  return (
+    <div style={{position:"relative",borderRadius:12,overflow:"hidden",marginBottom:14,border:"0.5px solid #ddd",background:"#fff"}}>
+      {logo&&<img src={logo} alt="" style={{position:"absolute",right:-10,top:"50%",transform:"translateY(-50%)",width:160,height:160,objectFit:"contain",opacity:0.07,pointerEvents:"none"}}/>}
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(105deg,"+tc+"18 0%,"+tc+"05 60%,transparent 100%)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:tc,borderRadius:"12px 0 0 12px"}}/>
+      <div style={{position:"relative",padding:"14px 16px 12px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+          {game.result&&<span style={{fontSize:12,fontWeight:700,color:resColor,background:resBg,borderRadius:5,padding:"2px 8px"}}>{game.result}{game.score?" - "+game.score:""}</span>}
+          {game.gameType&&game.gameType!=="Regular Season"&&<span style={{fontSize:11,color:tc,background:tc+"18",borderRadius:5,padding:"2px 8px",fontWeight:500}}>{game.gameType}</span>}
+          <span style={{fontSize:11,color:"#aaa",marginLeft:"auto"}}>{game.date}</span>
+        </div>
+        <div style={{fontWeight:700,fontSize:17,lineHeight:1.25,marginBottom:6,color:"#111"}}>{game.article?game.article.headline:("vs "+game.opponent)}</div>
+        <div style={{fontSize:12,color:"#777",marginBottom:6,fontWeight:500}}>{"vs "+game.opponent+" - "+game.season}</div>
+        {game.article&&<>
+          <div style={{fontSize:13,color:"#333",lineHeight:1.65,marginTop:4}}>{expanded?game.article.body:game.article.body.slice(0,130)+(game.article.body.length>130?"...":"")}</div>
+          {game.article.body.length>130&&<button onClick={()=>setExpanded(e=>!e)} style={{background:"none",border:"none",color:tc,fontSize:12,cursor:"pointer",padding:"4px 0 0",fontWeight:600}}>{expanded?"Show less":"Read more"}</button>}
+        </>}
+        {!game.article&&<div style={{fontSize:12,color:"#aaa",marginTop:4,fontStyle:"italic"}}>No recap available</div>}
+      </div>
+    </div>
+  );
 }
 
 function GalleryPage({gallery,activeTeam,season,seasons,tc,s,onAdd,onOpenLightbox}) {
@@ -136,7 +173,7 @@ function Lightbox({photo,isAdmin,onDelete,onClose}) {
 function AdminLoginModal({onSuccess,onClose,s,tc,adminPassword}) {
   const [pw,setPw] = useState("");
   const [err,setErr] = useState(false);
-  function attempt() { if(pw===adminPassword){onSuccess();}else{setErr(true);setPw("");setTimeout(()=>setErr(false),2000);} }
+  function attempt(){if(pw===adminPassword){onSuccess();}else{setErr(true);setPw("");setTimeout(()=>setErr(false),2000);}}
   return (
     <div>
       <div style={{fontWeight:600,fontSize:17,marginBottom:4}}>Admin Access</div>
@@ -153,12 +190,12 @@ function AdminLoginModal({onSuccess,onClose,s,tc,adminPassword}) {
 
 function PhotoAvatar({photo,number,size,tc,pid,onSave}) {
   const ref = useRef();
-  function handleFile(e) { const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>onSave(pid,ev.target.result); r.readAsDataURL(f); }
+  function handleFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onSave(pid,ev.target.result);r.readAsDataURL(f);}
   return (
     <div style={{position:"relative",width:size,height:size,flexShrink:0,cursor:"pointer"}} onClick={()=>ref.current.click()}>
       {photo
-        ? <img src={photo} style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,0.4)"}}/>
-        : <div style={{width:size,height:size,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:size*0.3,color:"#fff"}}>{"#"+number}</div>
+        ?<img src={photo} style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,0.4)"}}/>
+        :<div style={{width:size,height:size,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:size*0.3,color:"#fff"}}>{"#"+number}</div>
       }
       <div style={{position:"absolute",bottom:0,right:0,width:20,height:20,borderRadius:"50%",background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff"}}>+</div>
       <input ref={ref} type="file" accept="image/*" style={{display:"none"}} onChange={handleFile}/>
@@ -177,12 +214,12 @@ function GameLog({games,isG,player,tc,s}) {
         <span style={{fontSize:13,color:"rgba(255,255,255,0.8)"}}>{games.length+" game"+(games.length!==1?"s":"")}</span>
       </div>
       {games.length===0
-        ? <div style={{padding:"14px 16px",color:"#777",fontSize:14}}>No games recorded yet.</div>
-        : <>
+        ?<div style={{padding:"14px 16px",color:"#777",fontSize:14}}>No games recorded yet.</div>
+        :<>
           {displayed.map(g=>{
-            const gs = isG?g.goalieStats?.[player.id]:g.skaterStats?.[player.id];
+            const gs=isG?g.goalieStats?.[player.id]:g.skaterStats?.[player.id];
             if(!gs)return null;
-            const resColor = g.result==="W"?"#1a7a3c":g.result==="L"?"#c41a1a":"#777";
+            const resColor=g.result==="W"?"#1a7a3c":g.result==="L"?"#c41a1a":"#777";
             return (
               <div key={g.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 16px",borderBottom:"0.5px solid #ddd",fontSize:14}}>
                 <div>
@@ -202,40 +239,13 @@ function GameLog({games,isG,player,tc,s}) {
   );
 }
 
-function ArticleCard({game,tc,logo}) {
-  const [expanded,setExpanded] = useState(false);
-  const resColor = game.result==="W"?"#1a7a3c":game.result==="L"?"#c41a1a":game.result==="OTL"?"#b06000":"#777";
-  const resBg = game.result==="W"?"#e8f5ee":game.result==="L"?"#fdecea":game.result==="OTL"?"#fff3e0":"#f5f5f5";
-  return (
-    <div style={{position:"relative",borderRadius:12,overflow:"hidden",marginBottom:14,border:"0.5px solid #ddd",background:"#fff"}}>
-      {logo&&<img src={logo} alt="" style={{position:"absolute",right:-10,top:"50%",transform:"translateY(-50%)",width:160,height:160,objectFit:"contain",opacity:0.07,pointerEvents:"none"}}/>}
-      <div style={{position:"absolute",inset:0,background:"linear-gradient(105deg,"+tc+"18 0%,"+tc+"05 60%,transparent 100%)",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:tc,borderRadius:"12px 0 0 12px"}}/>
-      <div style={{position:"relative",padding:"14px 16px 12px 18px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,flexWrap:"wrap"}}>
-          {game.result&&<span style={{fontSize:12,fontWeight:700,color:resColor,background:resBg,borderRadius:5,padding:"2px 8px"}}>{game.result}{game.score?" - "+game.score:""}</span>}
-          {game.gameType&&game.gameType!=="Regular Season"&&<span style={{fontSize:11,color:tc,background:tc+"18",borderRadius:5,padding:"2px 8px",fontWeight:500}}>{game.gameType}</span>}
-          <span style={{fontSize:11,color:"#aaa",marginLeft:"auto"}}>{game.date}</span>
-        </div>
-        <div style={{fontWeight:700,fontSize:17,lineHeight:1.25,marginBottom:6,color:"#111"}}>{game.article?game.article.headline:("vs "+game.opponent)}</div>
-        <div style={{fontSize:12,color:"#777",marginBottom:6,fontWeight:500}}>{"vs "+game.opponent+" - "+game.season}</div>
-        {game.article&&<>
-          <div style={{fontSize:13,color:"#333",lineHeight:1.65,marginTop:4}}>{expanded?game.article.body:game.article.body.slice(0,130)+(game.article.body.length>130?"...":"")}</div>
-          {game.article.body.length>130&&<button onClick={()=>setExpanded(e=>!e)} style={{background:"none",border:"none",color:tc,fontSize:12,cursor:"pointer",padding:"4px 0 0",fontWeight:600}}>{expanded?"Show less":"Read more"}</button>}
-        </>}
-        {!game.article&&<div style={{fontSize:12,color:"#aaa",marginTop:4,fontStyle:"italic"}}>No recap available</div>}
-      </div>
-    </div>
-  );
-}
-
 function PlayerModal({modal,onSave,onDelete,onClose,s,tc,teamSeasons}) {
   const isEdit = modal.type==="editPlayer";
   const allSeasons = teamSeasons.filter(sv=>sv!=="All Time");
   const [form,setForm] = useState(isEdit?{...modal.player,activeSeasons:modal.player.activeSeasons||[...allSeasons]}:{name:"",number:"",position:"C",activeSeasons:[...allSeasons]});
   const [confirmDelete,setConfirmDelete] = useState(false);
-  const set = (k,v) => setForm(f=>({...f,[k]:v}));
-  function toggleSeason(sv) { const cur=form.activeSeasons||[]; set("activeSeasons",cur.includes(sv)?cur.filter(s=>s!==sv):[...cur,sv]); }
+  const set = (k,v)=>setForm(f=>({...f,[k]:v}));
+  function toggleSeason(sv){const cur=form.activeSeasons||[];set("activeSeasons",cur.includes(sv)?cur.filter(s=>s!==sv):[...cur,sv]);}
   return (
     <div>
       <div style={{fontWeight:500,fontSize:17,marginBottom:16}}>{isEdit?"Edit Player":"Add Player"}</div>
@@ -285,8 +295,8 @@ function GameModal({modal,players,seasons,defaultSeason,onSave,onClose,s,tc}) {
   const [goalieStats,setGoalieStats] = useState({});
   const skaters = players.filter(p=>p.position!=="G");
   const goalies = players.filter(p=>p.position==="G");
-  const setSS = (pid,k,v) => setSkaterStats(prev=>({...prev,[pid]:{...prev[pid],[k]:parseInt(v)||0}}));
-  const setGS = (pid,k,v) => setGoalieStats(prev=>({...prev,[pid]:{...prev[pid],[k]:parseInt(v)||0}}));
+  const setSS = (pid,k,v)=>setSkaterStats(prev=>({...prev,[pid]:{...prev[pid],[k]:parseInt(v)||0}}));
+  const setGS = (pid,k,v)=>setGoalieStats(prev=>({...prev,[pid]:{...prev[pid],[k]:parseInt(v)||0}}));
   const si = {...s.input,padding:"5px 6px",fontSize:13,textAlign:"center"};
   return (
     <div>
@@ -342,7 +352,7 @@ function EditStatsModal({modal,onSave,onClose,s,tc}) {
   const isG = player.position==="G";
   const cols = isG?GOALIE_COLS.filter(c=>c!=="GAA"):SKATER_COLS.filter(c=>c!=="P"&&c!=="PPG");
   const [vals,setVals] = useState({...modal.vals});
-  const set = (k,v) => setVals(prev=>({...prev,[k]:parseInt(v)||0}));
+  const set = (k,v)=>setVals(prev=>({...prev,[k]:parseInt(v)||0}));
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
@@ -371,7 +381,7 @@ function PasswordCard({onSavePassword,s}) {
   const [confirm,setConfirm] = useState("");
   const [error,setError] = useState("");
   const [saved,setSaved] = useState(false);
-  function handleSave() {
+  function handleSave(){
     if(!newPw){setError("Password cannot be empty.");return;}
     if(newPw!==confirm){setError("Passwords do not match.");return;}
     onSavePassword(newPw);setNewPw("");setConfirm("");setError("");setSaved(true);setTimeout(()=>setSaved(false),2000);
@@ -400,7 +410,11 @@ function TeamSettingsCard({tid,team,logo,font,onSaveLogo,onSaveFont,onSaveName,o
   function handleLogoFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onSaveLogo(tid,ev.target.result);r.readAsDataURL(f);}
   function handleFontFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onSaveFont(tid,ev.target.result);r.readAsDataURL(f);}
   function handleSaveName(){onSaveName(tid,name);setSavedName(true);setTimeout(()=>setSavedName(false),2000);}
-  function handleSaveColor(){const hex=color.startsWith("#")?color:"#"+color;if(!/^#[0-9A-Fa-f]{6}$/.test(hex)){setColorError(true);setTimeout(()=>setColorError(false),2000);return;}onSaveColor(tid,hex);setColor(hex);setSavedColor(true);setTimeout(()=>setSavedColor(false),2000);}
+  function handleSaveColor(){
+    const hex=color.startsWith("#")?color:"#"+color;
+    if(!/^#[0-9A-Fa-f]{6}$/.test(hex)){setColorError(true);setTimeout(()=>setColorError(false),2000);return;}
+    onSaveColor(tid,hex);setColor(hex);setSavedColor(true);setTimeout(()=>setSavedColor(false),2000);
+  }
   const previewColor=(()=>{const hex=color.startsWith("#")?color:"#"+color;return /^#[0-9A-Fa-f]{6}$/.test(hex)?hex:team.color;})();
   return (
     <div style={{background:"#fff",border:"0.5px solid #ddd",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
@@ -511,7 +525,7 @@ function App() {
       });
       localStorage.setItem("hockeyApp2",JSON.stringify(d));
       return d;
-    } catch(e) { return initData(); }
+    } catch(e){return initData();}
   });
 
   const [activeTeam,setActiveTeam] = useState("team1");
@@ -524,7 +538,7 @@ function App() {
   const [isAdmin,setIsAdmin] = useState(false);
   const [lightbox,setLightbox] = useState(null);
 
-  const save = d => { setData(d); try{localStorage.setItem("hockeyApp2",JSON.stringify(d));}catch(e){} };
+  const save = d=>{setData(d);try{localStorage.setItem("hockeyApp2",JSON.stringify(d));}catch(e){}};
   const teamCfg = getTeamCfg(data,activeTeam);
   const team = data.teams[activeTeam];
   const players = data.players[activeTeam]||[];
@@ -537,10 +551,11 @@ function App() {
   const activePlayers = season==="All Time"?players:players.filter(p=>(p.activeSeasons||[]).includes(season));
   const skaters = activePlayers.filter(p=>p.position!=="G");
   const goalies = activePlayers.filter(p=>p.position==="G");
-  const getStats = p => computeStats(p,games,data.statOverrides,season,seasons);
-  const sortPlayers = arr => [...arr].sort((a,b)=>(parseFloat(getStats(b)[sortCol])||0)-(parseFloat(getStats(a)[sortCol])||0));
+  const getStats = p=>computeStats(p,games,data.statOverrides,season,seasons);
+  const sortSkaters = arr=>[...arr].sort((a,b)=>(parseFloat(getStats(b)[sortCol])||0)-(parseFloat(getStats(a)[sortCol])||0));
+  const sortGoalies = arr=>[...arr].sort((a,b)=>(parseFloat(getStats(b)["W"])||0)-(parseFloat(getStats(a)["W"])||0));
   const teamOrder = (data.teamOrder||Object.keys(data.teams)).filter(tid=>data.teams[tid]);
-  function requireAdmin(fn) { if(isAdmin){fn();return;} setModal({type:"adminLogin",onSuccess:fn}); }
+  function requireAdmin(fn){if(isAdmin){fn();return;}setModal({type:"adminLogin",onSuccess:fn});}
 
   const s = {
     btn:{background:tc,color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:500},
@@ -568,11 +583,13 @@ function App() {
   function deleteGalleryPhoto(seasonKey,photoId){const d=JSON.parse(JSON.stringify(data));if(d.gallery[activeTeam]&&d.gallery[activeTeam][seasonKey])d.gallery[activeTeam][seasonKey]=d.gallery[activeTeam][seasonKey].filter(p=>p.id!==photoId);save(d);setLightbox(null);}
   function moveTeam(tid,dir){const d=JSON.parse(JSON.stringify(data));const order=[...(d.teamOrder||Object.keys(d.teams))];const i=order.indexOf(tid);const ni=i+dir;if(ni<0||ni>=order.length)return;[order[i],order[ni]]=[order[ni],order[i]];d.teamOrder=order;save(d);}
 
+  function handleSeasonChange(val){setSeason(val);setSortCol("P");setSortDir(-1);}
+
   const record = getRecord(games,season);
   const playerInView = selectedPlayer?players.find(p=>p.id===selectedPlayer.id)||selectedPlayer:null;
   const fontFaceCSS = Object.entries(teamFonts).filter(([,v])=>v).map(([tid,url])=>"@font-face{font-family:'TeamFont_"+tid+"';src:url('"+url+"');}").join(" ");
 
-  const StatRow = ({cols,stats,highlight}) => (
+  const StatRow = ({cols,stats,highlight})=>(
     <div style={{display:"flex",borderRadius:8,overflow:"hidden",border:"1px solid "+tc+"22"}}>
       {cols.map((c,i,arr)=>(
         <div key={c} style={{flex:1,textAlign:"center",padding:"10px 4px",background:i%2===0?"#f5f5f5":"#fff",borderRight:i<arr.length-1?"0.5px solid #ddd":"none"}}>
@@ -592,7 +609,7 @@ function App() {
         {teamOrder.map(tid=>{
           const t=data.teams[tid], active=activeTeam===tid, logo=teamLogos[tid];
           return (
-            <button key={tid} onClick={()=>{setActiveTeam(tid);setSelectedPlayer(null);setPage("home");setSeason(getTeamCfg(data,tid).seasons[1]||getTeamCfg(data,tid).seasons[0]);setModal(null);}}
+            <button key={tid} onClick={()=>{setActiveTeam(tid);setSelectedPlayer(null);setPage("home");setSeason(getTeamCfg(data,tid).seasons[1]||getTeamCfg(data,tid).seasons[0]);setModal(null);setSortCol("P");setSortDir(-1);}}
               style={{flex:1,minWidth:120,padding:"8px 6px",borderRadius:10,border:"2px solid "+(active?t.color:"#ccc"),background:active?t.color:"#fff",color:active?"#fff":"#222",fontWeight:500,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
               {logo&&<img src={logo} alt="" style={{width:26,height:26,objectFit:"contain",borderRadius:4,flexShrink:0}}/>}
               <span>{t.name}</span>
@@ -603,7 +620,7 @@ function App() {
 
       {/* Season */}
       <div style={{marginBottom:14}}>
-        <select value={season} onChange={e=>setSeason(e.target.value)} style={s.input}>
+        <select value={season} onChange={e=>handleSeasonChange(e.target.value)} style={s.input}>
           {seasons.map(sv=><option key={sv} value={sv}>{sv}</option>)}
         </select>
       </div>
@@ -682,7 +699,7 @@ function App() {
                   <th style={{...s.th("",false),textAlign:"left",paddingLeft:10}}>Player</th>
                   {SKATER_COLS.map(c=><th key={c} style={s.th(c,sortCol===c)} onClick={()=>{setSortCol(c);setSortDir(sortCol===c?-sortDir:-1);}}>{c}{sortCol===c?(sortDir<0?"↓":"↑"):""}</th>)}
                 </tr></thead>
-                <tbody>{sortPlayers(skaters).map(p=>{const st=getStats(p);return(
+                <tbody>{sortSkaters(skaters).map(p=>{const st=getStats(p);return(
                   <tr key={p.id} onClick={()=>{setSelectedPlayer(p);setModal(null);}} style={{cursor:"pointer",borderBottom:"0.5px solid #ddd"}}>
                     <td style={{...s.td,textAlign:"left",paddingLeft:10}}><span style={{fontWeight:500}}>{p.name}</span><span style={{fontSize:11,color:"#777",marginLeft:5}}>{"#"+p.number}</span></td>
                     {SKATER_COLS.map(c=><td key={c} style={{...s.td,fontWeight:c==="P"?600:400,color:c==="P"?tc:"#222"}}>{st[c]}</td>)}
@@ -699,7 +716,7 @@ function App() {
                   <th style={{...s.th("",false),textAlign:"left",paddingLeft:10}}>Player</th>
                   {GOALIE_COLS.map(c=><th key={c} style={s.th(c,sortCol===c)} onClick={()=>{setSortCol(c);setSortDir(sortCol===c?-sortDir:-1);}}>{c}{sortCol===c?(sortDir<0?"↓":"↑"):""}</th>)}
                 </tr></thead>
-                <tbody>{sortPlayers(goalies).map(p=>{const st=getStats(p);return(
+                <tbody>{sortGoalies(goalies).map(p=>{const st=getStats(p);return(
                   <tr key={p.id} onClick={()=>{setSelectedPlayer(p);setModal(null);}} style={{cursor:"pointer",borderBottom:"0.5px solid #ddd"}}>
                     <td style={{...s.td,textAlign:"left",paddingLeft:10}}><span style={{fontWeight:500}}>{p.name}</span><span style={{fontSize:11,color:"#777",marginLeft:5}}>{"#"+p.number}</span></td>
                     {GOALIE_COLS.map(c=><td key={c} style={{...s.td,fontWeight:c==="W"?600:400,color:c==="W"?tc:"#222"}}>{st[c]}</td>)}
