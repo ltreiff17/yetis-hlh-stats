@@ -20,67 +20,86 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel">
 const {useState, useRef} = React;
+
+// ── Constants ────────────────────────────────────────────────────────────────
 const GAME_TYPES = ["Regular Season","Playoff","Championship","Tournament"];
 const SKATER_COLS = ["GP","G","A","P","PPG","PIM"];
 const GOALIE_COLS = ["GP","W","L","T","OTL","SO","GA","GAA"];
 const POSITIONS = ["C","LW","RW","D","G"];
-const BUILT_IN_TEAMS = ["team1","team2"];
-const DEFAULT_SEASONS = ["All Time","Winter 2025-2026","Summer 2025"];
-const TEAMS_BASE = {
-  team1:{name:"High Life Hockey (D5)",color:"#223E54",seasons:["All Time","Winter 2025-2026","Summer 2025"]},
-  team2:{name:"Yetis (D6)",color:"#622B3C",seasons:["All Time","Winter 2025-2026","Summer 2025","Winter 2024-2025","Summer 2024","Winter 2023-2024","Summer 2023","Winter 2022-2023"]}
-};
 
+// ── Data helpers ─────────────────────────────────────────────────────────────
 function getTeamCfg(data, tid) {
-  const base = TEAMS_BASE[tid];
-  return {name:data.teams[tid].name, color:data.teams[tid].color, seasons:base?base.seasons:DEFAULT_SEASONS};
+  const seasons = (data.customSeasons&&data.customSeasons[tid]) ? data.customSeasons[tid] : [];
+  return { name:data.teams[tid].name, color:data.teams[tid].color, seasons:["All Time",...seasons] };
 }
 
 function initData() {
   return {
-    teams:{team1:{name:"High Life Hockey (D5)",color:"#223E54"},team2:{name:"Yetis (D6)",color:"#622B3C"}},
-    players:{team1:[],team2:[]}, games:{team1:[],team2:[]},
-    statOverrides:{}, playerPhotos:{}, teamLogos:{}, teamFonts:{},
-    adminPassword:"admin", gallery:{}, teamOrder:["team1","team2"]
+    teams:{ team1:{ name:"My Team", color:"#223E54" } },
+    players:{ team1:[] }, games:{ team1:[] },
+    statOverrides:{}, playerPhotos:{}, teamLogos:{}, teamSecondaryLogos:{}, teamFonts:{},
+    adminPassword:"admin", gallery:{}, teamOrder:["team1"],
+    customSeasons:{ team1:[] }
   };
 }
 
+function loadData() {
+  try {
+    const raw = localStorage.getItem("hockeyStatsApp");
+    const d = raw ? JSON.parse(raw) : initData();
+    if(!d.teamLogos) d.teamLogos={};
+    if(!d.teamSecondaryLogos) d.teamSecondaryLogos={};
+    if(!d.playerPhotos) d.playerPhotos={};
+    if(!d.teamFonts) d.teamFonts={};
+    if(!d.adminPassword) d.adminPassword="admin";
+    if(!d.gallery) d.gallery={};
+    if(!d.teamOrder) d.teamOrder=Object.keys(d.teams);
+    if(!d.customSeasons) d.customSeasons={};
+    d.teamOrder = d.teamOrder.filter(tid=>d.teams[tid]);
+    Object.keys(d.teams).forEach(tid=>{
+      if(!d.players[tid]) d.players[tid]=[];
+      if(!d.games[tid]) d.games[tid]=[];
+      if(!d.customSeasons[tid]) d.customSeasons[tid]=[];
+      const cfg = getTeamCfg(d,tid);
+      (d.players[tid]||[]).forEach(p=>{
+        if(!p.activeSeasons) p.activeSeasons=[...cfg.seasons.filter(s=>s!=="All Time")];
+      });
+    });
+    localStorage.setItem("hockeyStatsApp",JSON.stringify(d));
+    return d;
+  } catch(e) { return initData(); }
+}
+
+function saveData(d) {
+  try { localStorage.setItem("hockeyStatsApp",JSON.stringify(d)); } catch(e){}
+}
+
 function computeStats(player, games, overrides, season, teamSeasons) {
-  const isG = player.position === "G";
-  if (season === "All Time") {
-    const all = [...new Set(teamSeasons)].filter(s => s !== "All Time");
+  const isG = player.position==="G";
+  if (season==="All Time") {
+    const all = [...new Set(teamSeasons)].filter(s=>s!=="All Time");
     if (isG) {
-      let t = {GP:0,W:0,L:0,T:0,OTL:0,SO:0,GA:0};
-      all.forEach(sv => {
-        const st = computeStats(player,games,overrides,sv,teamSeasons);
-        if(st.GP>0){t.GP+=st.GP;t.W+=st.W;t.L+=st.L;t.T+=st.T;t.OTL+=st.OTL;t.SO+=st.SO;t.GA+=st.GA;}
-      });
-      t.GAA = t.GP>0?(t.GA/t.GP).toFixed(2):"0.00";
-      return t;
+      let t={GP:0,W:0,L:0,T:0,OTL:0,SO:0,GA:0};
+      all.forEach(sv=>{const st=computeStats(player,games,overrides,sv,teamSeasons);if(st.GP>0){t.GP+=st.GP;t.W+=st.W;t.L+=st.L;t.T+=st.T;t.OTL+=st.OTL;t.SO+=st.SO;t.GA+=st.GA;}});
+      t.GAA=t.GP>0?(t.GA/t.GP).toFixed(2):"0.00"; return t;
     } else {
-      let t = {GP:0,G:0,A:0,PIM:0};
-      all.forEach(sv => {
-        const st = computeStats(player,games,overrides,sv,teamSeasons);
-        if(st.GP>0){t.GP+=st.GP;t.G+=st.G;t.A+=st.A;t.PIM+=st.PIM;}
-      });
-      t.P=t.G+t.A; t.PPG=t.GP>0?(t.P/t.GP).toFixed(2):"0.00";
-      return t;
+      let t={GP:0,G:0,A:0,PIM:0};
+      all.forEach(sv=>{const st=computeStats(player,games,overrides,sv,teamSeasons);if(st.GP>0){t.GP+=st.GP;t.G+=st.G;t.A+=st.A;t.PIM+=st.PIM;}});
+      t.P=t.G+t.A; t.PPG=t.GP>0?(t.P/t.GP).toFixed(2):"0.00"; return t;
     }
   }
-  const fg = games.filter(g => g.season===season);
-  const ov = overrides[player.id+"_"+season]||{};
+  const fg=games.filter(g=>g.season===season);
+  const ov=overrides[player.id+"_"+season]||{};
   if (isG) {
-    let b = {GP:0,W:0,L:0,T:0,OTL:0,SO:0,GA:0};
-    fg.forEach(g => {const s=g.goalieStats?.[player.id];if(s){b.GP++;b.W+=s.W||0;b.L+=s.L||0;b.T+=s.T||0;b.OTL+=s.OTL||0;b.SO+=s.SO||0;b.GA+=s.GA||0;}});
+    let b={GP:0,W:0,L:0,T:0,OTL:0,SO:0,GA:0};
+    fg.forEach(g=>{const s=g.goalieStats?.[player.id];if(s){b.GP++;b.W+=s.W||0;b.L+=s.L||0;b.T+=s.T||0;b.OTL+=s.OTL||0;b.SO+=s.SO||0;b.GA+=s.GA||0;}});
     if(Object.keys(ov).length>0)["GP","W","L","T","OTL","SO","GA"].forEach(k=>{if(ov[k]!==undefined)b[k]=ov[k];});
-    b.GAA=b.GP>0?(b.GA/b.GP).toFixed(2):"0.00";
-    return b;
+    b.GAA=b.GP>0?(b.GA/b.GP).toFixed(2):"0.00"; return b;
   } else {
-    let b = {GP:0,G:0,A:0,PIM:0};
-    fg.forEach(g => {const s=g.skaterStats?.[player.id];if(s){b.GP++;b.G+=s.G||0;b.A+=s.A||0;b.PIM+=s.PIM||0;}});
+    let b={GP:0,G:0,A:0,PIM:0};
+    fg.forEach(g=>{const s=g.skaterStats?.[player.id];if(s){b.GP++;b.G+=s.G||0;b.A+=s.A||0;b.PIM+=s.PIM||0;}});
     if(Object.keys(ov).length>0)["GP","G","A","PIM"].forEach(k=>{if(ov[k]!==undefined)b[k]=ov[k];});
-    b.P=b.G+b.A; b.PPG=b.GP>0?(b.P/b.GP).toFixed(2):"0.00";
-    return b;
+    b.P=b.G+b.A; b.PPG=b.GP>0?(b.P/b.GP).toFixed(2):"0.00"; return b;
   }
 }
 
@@ -91,77 +110,261 @@ function getRecord(games, season) {
   return {W,L,T,OTL,GP:f.length};
 }
 
-function ArticleCard({game,tc,logo}) {
-  const [expanded,setExpanded] = useState(false);
-  const resColor = game.result==="W"?"#1a7a3c":game.result==="L"?"#c41a1a":game.result==="OTL"?"#b06000":"#777";
-  const resBg = game.result==="W"?"#e8f5ee":game.result==="L"?"#fdecea":game.result==="OTL"?"#fff3e0":"#f5f5f5";
+function formatGameTime(date, time) {
+  if(!date) return "";
+  const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const d = new Date(date+"T12:00:00");
+  return days[d.getDay()]+", "+months[d.getMonth()]+" "+d.getDate()+(time?" at "+time:"");
+}
+
+// ── BoxScore ──────────────────────────────────────────────────────────────────
+function BoxScore({game, players, tc}) {
+  const skaters=(players||[]).filter(p=>p.position!=="G");
+  const goalies=(players||[]).filter(p=>p.position==="G");
+  const th={padding:"6px",fontSize:11,fontWeight:600,color:"#fff",textAlign:"center",whiteSpace:"nowrap"};
+  const td={padding:"6px",fontSize:12,textAlign:"center",color:"#222",borderBottom:"0.5px solid #eee"};
+  const tdL={...td,textAlign:"left",paddingLeft:8};
+  const sorted=[...skaters].sort((a,b)=>{
+    const sa=game.skaterStats?.[a.id]||{},sb=game.skaterStats?.[b.id]||{};
+    return ((sb.G||0)+(sb.A||0))-((sa.G||0)+(sa.A||0));
+  });
   return (
-    <div style={{position:"relative",borderRadius:12,overflow:"hidden",marginBottom:14,border:"0.5px solid #ddd",background:"#fff"}}>
-      {logo&&<img src={logo} alt="" style={{position:"absolute",right:-10,top:"50%",transform:"translateY(-50%)",width:160,height:160,objectFit:"contain",opacity:0.07,pointerEvents:"none"}}/>}
-      <div style={{position:"absolute",inset:0,background:"linear-gradient(105deg,"+tc+"18 0%,"+tc+"05 60%,transparent 100%)",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:tc,borderRadius:"12px 0 0 12px"}}/>
-      <div style={{position:"relative",padding:"14px 16px 12px 18px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,flexWrap:"wrap"}}>
-          {game.result&&<span style={{fontSize:12,fontWeight:700,color:resColor,background:resBg,borderRadius:5,padding:"2px 8px"}}>{game.result}{game.score?" - "+game.score:""}</span>}
-          {game.gameType&&game.gameType!=="Regular Season"&&<span style={{fontSize:11,color:tc,background:tc+"18",borderRadius:5,padding:"2px 8px",fontWeight:500}}>{game.gameType}</span>}
-          <span style={{fontSize:11,color:"#aaa",marginLeft:"auto"}}>{game.date}</span>
+    <div style={{marginTop:12,paddingTop:12,borderTop:"0.5px solid #e0e0e0"}}>
+      {skaters.length>0&&(
+        <div style={{marginBottom:goalies.length>0?12:0}}>
+          <div style={{fontSize:11,fontWeight:600,color:"#999",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Skaters</div>
+          <div style={{borderRadius:8,overflow:"hidden",border:"0.5px solid #ddd"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr style={{background:tc}}>
+                <th style={{...th,textAlign:"left",paddingLeft:8}}>Player</th>
+                {["G","A","P","PIM"].map(c=><th key={c} style={th}>{c}</th>)}
+              </tr></thead>
+              <tbody>{sorted.map((p,i)=>{
+                const st=game.skaterStats?.[p.id]||{};
+                const g=st.G||0,a=st.A||0,pts=g+a;
+                return(
+                  <tr key={p.id} style={{background:i%2===0?"#fafafa":"#fff"}}>
+                    <td style={{...tdL,fontWeight:pts>0?600:400}}>{p.name}<span style={{fontSize:10,color:"#aaa",marginLeft:4}}>{"#"+p.number}</span></td>
+                    <td style={{...td,fontWeight:g>0?600:400,color:g>0?tc:"#222"}}>{g}</td>
+                    <td style={{...td,fontWeight:a>0?600:400,color:a>0?tc:"#222"}}>{a}</td>
+                    <td style={{...td,fontWeight:pts>0?600:400,color:pts>0?tc:"#222"}}>{pts}</td>
+                    <td style={td}>{st.PIM||0}</td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
         </div>
-        <div style={{fontWeight:700,fontSize:17,lineHeight:1.25,marginBottom:6,color:"#111"}}>{game.article?game.article.headline:("vs "+game.opponent)}</div>
-        <div style={{fontSize:12,color:"#777",marginBottom:6,fontWeight:500}}>{"vs "+game.opponent+" - "+game.season}</div>
-        {game.article&&<>
-          <div style={{fontSize:13,color:"#333",lineHeight:1.65,marginTop:4}}>{expanded?game.article.body:game.article.body.slice(0,130)+(game.article.body.length>130?"...":"")}</div>
-          {game.article.body.length>130&&<button onClick={()=>setExpanded(e=>!e)} style={{background:"none",border:"none",color:tc,fontSize:12,cursor:"pointer",padding:"4px 0 0",fontWeight:600}}>{expanded?"Show less":"Read more"}</button>}
-        </>}
-        {!game.article&&<div style={{fontSize:12,color:"#aaa",marginTop:4,fontStyle:"italic"}}>No recap available</div>}
+      )}
+      {goalies.length>0&&(
+        <div>
+          <div style={{fontSize:11,fontWeight:600,color:"#999",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Goalies</div>
+          <div style={{borderRadius:8,overflow:"hidden",border:"0.5px solid #ddd"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr style={{background:tc}}>
+                <th style={{...th,textAlign:"left",paddingLeft:8}}>Player</th>
+                {["W","L","GA","SO"].map(c=><th key={c} style={th}>{c}</th>)}
+              </tr></thead>
+              <tbody>{goalies.map((p,i)=>{
+                const st=game.goalieStats?.[p.id]||{};
+                return(
+                  <tr key={p.id} style={{background:i%2===0?"#fafafa":"#fff"}}>
+                    <td style={tdL}>{p.name}<span style={{fontSize:10,color:"#aaa",marginLeft:4}}>{"#"+p.number}</span></td>
+                    <td style={{...td,fontWeight:(st.W||0)>0?600:400,color:(st.W||0)>0?tc:"#222"}}>{st.W||0}</td>
+                    <td style={{...td,fontWeight:(st.L||0)>0?600:400,color:(st.L||0)>0?"#c41a1a":"#222"}}>{st.L||0}</td>
+                    <td style={td}>{st.GA||0}</td>
+                    <td style={td}>{st.SO||0}</td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Cards ─────────────────────────────────────────────────────────────────────
+function UpNextCard({game, tc, secondaryLogo, onEnterResult}) {
+  return (
+    <div style={{position:"relative",borderRadius:12,overflow:"hidden",marginBottom:16,border:"2px solid "+tc+"44",background:"#fff"}}>
+      {secondaryLogo&&<img src={secondaryLogo} alt="" style={{position:"absolute",right:-8,top:"50%",transform:"translateY(-50%)",width:150,height:150,objectFit:"contain",opacity:0.18,pointerEvents:"none"}}/>}
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(105deg,"+tc+"22 0%,"+tc+"08 55%,transparent 100%)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:tc,borderRadius:"12px 0 0 12px"}}/>
+      <div style={{position:"relative",padding:"14px 16px 14px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+          <span style={{fontSize:11,fontWeight:600,color:tc,background:tc+"18",borderRadius:20,padding:"2px 10px",letterSpacing:"0.04em"}}>UP NEXT</span>
+          {game.gameType&&game.gameType!=="Regular Season"&&<span style={{fontSize:11,color:"#777",background:"#f0f0f0",borderRadius:20,padding:"2px 8px"}}>{game.gameType}</span>}
+        </div>
+        <div style={{fontWeight:700,fontSize:18,color:"#111",marginBottom:2}}>vs {game.opponent}</div>
+        <div style={{fontSize:12,color:tc,fontWeight:500,marginBottom:3}}>{game.season}</div>
+        <div style={{fontSize:13,color:"#555",marginBottom:2}}>{formatGameTime(game.date,game.time)}</div>
+        {game.location&&<div style={{fontSize:13,color:"#777",marginBottom:10}}>📍 {game.location}</div>}
+        {!game.location&&<div style={{marginBottom:10}}/>}
+        <button onClick={onEnterResult} style={{background:tc,color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>Enter Result</button>
       </div>
     </div>
   );
 }
 
-function GalleryPage({gallery,activeTeam,season,seasons,tc,s,onAdd,onOpenLightbox}) {
-  const fileRef = useRef();
-  const allSeasons = seasons.filter(sv=>sv!=="All Time");
-  const uploadSeason = season==="All Time"?allSeasons[0]:season;
-  const teamGallery = gallery[activeTeam]||{};
-  let photos = [];
-  if (season==="All Time") {
+function ArticleCard({game, tc, secondaryLogo, players}) {
+  const [expanded,setExpanded]=useState(false);
+  const [boxOpen,setBoxOpen]=useState(false);
+  const resColor=game.result==="W"?"#1a7a3c":game.result==="L"?"#c41a1a":game.result==="OTL"?"#b06000":"#777";
+  const resBg=game.result==="W"?"#e8f5ee":game.result==="L"?"#fdecea":game.result==="OTL"?"#fff3e0":"#f5f5f5";
+  return (
+    <div style={{position:"relative",borderRadius:12,overflow:"hidden",marginBottom:14,border:"0.5px solid #ddd",background:"#fff"}}>
+      {/* Secondary logo is absolutely positioned and stays fixed even as content expands */}
+      {secondaryLogo&&<img src={secondaryLogo} alt="" style={{position:"absolute",right:-8,top:20,width:160,height:160,objectFit:"contain",opacity:0.18,pointerEvents:"none"}}/>}
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(105deg,"+tc+"22 0%,"+tc+"08 55%,transparent 100%)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:tc,borderRadius:"12px 0 0 12px"}}/>
+      <div style={{position:"relative",padding:"14px 16px 12px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+          {game.result&&<span style={{fontSize:12,fontWeight:700,color:resColor,background:resBg,borderRadius:5,padding:"2px 8px"}}>{game.result}{game.score?" - "+game.score:""}</span>}
+          {game.gameType&&game.gameType!=="Regular Season"&&<span style={{fontSize:11,color:tc,background:tc+"18",borderRadius:5,padding:"2px 8px",fontWeight:500}}>{game.gameType}</span>}
+        </div>
+        <div style={{fontWeight:700,fontSize:17,lineHeight:1.25,marginBottom:4,color:"#111"}}>{game.article?game.article.headline:"vs "+game.opponent}</div>
+        <div style={{fontSize:12,color:"#777",fontWeight:500,marginBottom:1}}>{game.season}</div>
+        <div style={{fontSize:12,color:"#999",marginBottom:game.location?1:6}}>{formatGameTime(game.date,game.time)}</div>
+        {game.location&&<div style={{fontSize:12,color:"#999",marginBottom:6}}>📍 {game.location}</div>}
+        {game.article&&<>
+          <div style={{fontSize:13,color:"#333",lineHeight:1.65,marginTop:4}}>{expanded?game.article.body:game.article.body.slice(0,130)+(game.article.body.length>130?"...":"")}</div>
+          {game.article.body.length>130&&<button onClick={()=>setExpanded(e=>!e)} style={{background:"none",border:"none",color:tc,fontSize:12,cursor:"pointer",padding:"4px 0 0",fontWeight:600,display:"block"}}>{expanded?"Show less":"Read more"}</button>}
+        </>}
+        {!game.article&&<div style={{fontSize:12,color:"#aaa",marginTop:4,fontStyle:"italic"}}>No recap available</div>}
+        {players&&players.length>0&&(
+          <div style={{marginTop:10}}>
+            <button onClick={()=>setBoxOpen(b=>!b)} style={{background:"none",border:"0.5px solid "+tc+"66",borderRadius:6,color:tc,fontSize:12,cursor:"pointer",padding:"4px 10px",fontWeight:600}}>{boxOpen?"Hide Box Score ↑":"Box Score ↓"}</button>
+          </div>
+        )}
+      </div>
+      {boxOpen&&players&&players.length>0&&<div style={{padding:"0 16px 14px 18px"}}><BoxScore game={game} players={players} tc={tc}/></div>}
+    </div>
+  );
+}
+
+function ScheduleResultCard({game, tc, players, onDelete}) {
+  const [boxOpen,setBoxOpen]=useState(false);
+  const [confirmDel,setConfirmDel]=useState(false);
+  const resColor=game.result==="W"?"#1a7a3c":game.result==="L"?"#c41a1a":game.result==="OTL"?"#b06000":"#777";
+  const resBg=game.result==="W"?"#e8f5ee":game.result==="L"?"#fdecea":game.result==="OTL"?"#fff3e0":"#f5f5f5";
+  return (
+    <div style={{background:"#fff",border:"0.5px solid #ddd",borderRadius:10,padding:"12px 16px",marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:2}}>
+            <span style={{fontWeight:600,fontSize:15}}>vs {game.opponent}</span>
+            {game.result&&<span style={{fontSize:13,fontWeight:600,color:resColor,background:resBg,borderRadius:6,padding:"2px 8px"}}>{game.result}{game.score?" - "+game.score:""}</span>}
+            {game.gameType&&game.gameType!=="Regular Season"&&<span style={{fontSize:12,color:tc,background:tc+"18",borderRadius:6,padding:"2px 8px",fontWeight:500}}>{game.gameType}</span>}
+          </div>
+          <div style={{fontSize:13,color:"#777"}}>{formatGameTime(game.date,game.time)}</div>
+          {game.location&&<div style={{fontSize:12,color:"#aaa"}}>📍 {game.location}</div>}
+          {players&&players.length>0&&(
+            <button onClick={()=>setBoxOpen(b=>!b)} style={{background:"none",border:"0.5px solid "+tc+"66",borderRadius:6,color:tc,fontSize:12,cursor:"pointer",padding:"4px 10px",fontWeight:600,marginTop:6}}>{boxOpen?"Hide Box Score ↑":"Box Score ↓"}</button>
+          )}
+        </div>
+        <div style={{flexShrink:0,marginLeft:8}}>
+          {!confirmDel
+            ?<button onClick={()=>setConfirmDel(true)} style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:20,lineHeight:1,padding:"0 4px"}}>×</button>
+            :<div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+              <span style={{fontSize:11,color:"#c41a1a"}}>Delete?</span>
+              <div style={{display:"flex",gap:4}}>
+                <button onClick={onDelete} style={{background:"#c41a1a",color:"#fff",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>Yes</button>
+                <button onClick={()=>setConfirmDel(false)} style={{background:"#f0f0f0",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>No</button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+      {boxOpen&&<BoxScore game={game} players={players} tc={tc}/>}
+    </div>
+  );
+}
+
+function UpcomingGameCard({game, tc, s, onEnterResult, onDelete}) {
+  const [confirmDel,setConfirmDel]=useState(false);
+  return (
+    <div style={{...s.card,marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:600,fontSize:15,marginBottom:2}}>vs {game.opponent}</div>
+          <div style={{fontSize:13,color:"#555",marginBottom:1}}>{formatGameTime(game.date,game.time)}</div>
+          {game.location&&<div style={{fontSize:13,color:"#777",marginBottom:6}}>📍 {game.location}</div>}
+          {game.gameType&&game.gameType!=="Regular Season"&&<span style={{fontSize:11,color:tc,background:tc+"18",borderRadius:5,padding:"2px 8px",fontWeight:500}}>{game.gameType}</span>}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end",marginLeft:8}}>
+          <button onClick={onEnterResult} style={{background:tc,color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:500,whiteSpace:"nowrap"}}>Enter Result</button>
+          {!confirmDel
+            ?<button onClick={()=>setConfirmDel(true)} style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:12,padding:0}}>Remove</button>
+            :<div style={{display:"flex",gap:4,alignItems:"center"}}>
+              <span style={{fontSize:11,color:"#c41a1a"}}>Sure?</span>
+              <button onClick={onDelete} style={{background:"#c41a1a",color:"#fff",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>Yes</button>
+              <button onClick={()=>setConfirmDel(false)} style={{background:"#f0f0f0",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>No</button>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CaptainBadge({role}) {
+  if(!role) return null;
+  return <span style={{fontSize:11,fontWeight:700,color:"#fff",background: role==="C"?"#b8860b":"#666",borderRadius:4,padding:"1px 5px",marginLeft:5,letterSpacing:"0.03em"}}>{role}</span>;
+}
+function GalleryPage({gallery, activeTeam, season, seasons, tc, s, onAdd, onOpenLightbox}) {
+  const fileRef=useRef();
+  const allSeasons=seasons.filter(sv=>sv!=="All Time");
+  const uploadSeason=season==="All Time"?(allSeasons[0]||""):season;
+  const teamGallery=(gallery&&gallery[activeTeam])||{};
+  let photos=[];
+  if(season==="All Time"){
     allSeasons.forEach(sv=>(teamGallery[sv]||[]).forEach(p=>photos.push({...p,seasonKey:sv,seasonLabel:sv})));
     photos.sort((a,b)=>new Date(b.uploadedAt)-new Date(a.uploadedAt));
   } else {
     (teamGallery[season]||[]).forEach(p=>photos.push({...p,seasonKey:season,seasonLabel:null}));
     photos.sort((a,b)=>new Date(b.uploadedAt)-new Date(a.uploadedAt));
   }
-  function handleFiles(e) {
+  function handleFiles(e){
+    if(!uploadSeason){alert("Please add a season first.");return;}
     Array.from(e.target.files).forEach(f=>{const r=new FileReader();r.onload=ev=>onAdd(uploadSeason,ev.target.result);r.readAsDataURL(f);});
     e.target.value="";
   }
   return (
     <div>
       <div style={{background:"#fff",border:"2px dashed "+tc+"55",borderRadius:12,padding:16,marginBottom:16,textAlign:"center"}}>
-        <div style={{fontSize:13,color:"#777",marginBottom:10}}>{season==="All Time"?"Uploading to: ":"Season: "}<span style={{fontWeight:600,color:tc}}>{uploadSeason}</span></div>
+        <div style={{fontSize:13,color:"#777",marginBottom:10}}>
+          {season==="All Time"?"Uploading to: ":"Season: "}
+          <span style={{fontWeight:600,color:tc}}>{season==="All Time"?"All Time Gallery":uploadSeason}</span>
+        </div>
         <input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}} onChange={handleFiles}/>
         <button onClick={()=>fileRef.current.click()} style={{...s.btn,fontSize:14,padding:"10px 22px"}}>Upload Photos</button>
         <div style={{fontSize:11,color:"#bbb",marginTop:8}}>JPG, PNG - Multiple allowed</div>
       </div>
-      {photos.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"#aaa",fontSize:14}}>No photos yet for {season}.<br/>Be the first to upload one!</div>}
-      {photos.length>0&&<div style={{columns:"2 140px",columnGap:8}}>
-        {photos.map(photo=>(
-          <div key={photo.id} onClick={()=>onOpenLightbox(photo)} style={{breakInside:"avoid",marginBottom:8,position:"relative",borderRadius:10,overflow:"hidden",cursor:"pointer",border:"0.5px solid #ddd"}}>
-            <img src={photo.url} alt="" style={{width:"100%",display:"block"}}/>
-            {photo.seasonLabel&&<div style={{position:"absolute",top:6,left:6,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:20,maxWidth:"calc(100% - 12px)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{photo.seasonLabel}</div>}
-          </div>
-        ))}
-      </div>}
+      {photos.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"#aaa",fontSize:14}}>No photos yet.<br/>Be the first to upload one!</div>}
+      {photos.length>0&&(
+        <div style={{columns:"2 140px",columnGap:8}}>
+          {photos.map(photo=>(
+            <div key={photo.id} onClick={()=>onOpenLightbox(photo)} style={{breakInside:"avoid",marginBottom:8,position:"relative",borderRadius:10,overflow:"hidden",cursor:"pointer",border:"0.5px solid #ddd"}}>
+              <img src={photo.url} alt="" style={{width:"100%",display:"block"}}/>
+              {photo.seasonLabel&&<div style={{position:"absolute",top:6,left:6,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:20,maxWidth:"calc(100% - 12px)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{photo.seasonLabel}</div>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function Lightbox({photo,isAdmin,onDelete,onClose}) {
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function Lightbox({photo, isAdmin, onDelete, onClose}) {
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:1000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{position:"absolute",top:16,right:16,display:"flex",gap:10}}>
         {isAdmin&&<button onClick={e=>{e.stopPropagation();onDelete();}} style={{background:"rgba(196,26,26,0.85)",border:"none",color:"#fff",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:13,fontWeight:600}}>Delete</button>}
-        <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:18,lineHeight:1}}>X</button>
+        <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:18,lineHeight:1}}>×</button>
       </div>
       <img src={photo.url} alt="" onClick={e=>e.stopPropagation()} style={{maxWidth:"100%",maxHeight:"80vh",borderRadius:12,objectFit:"contain"}}/>
       {photo.seasonLabel&&<div style={{marginTop:12,color:"rgba(255,255,255,0.55)",fontSize:12,textAlign:"center"}}>{photo.seasonLabel}</div>}
@@ -170,9 +373,9 @@ function Lightbox({photo,isAdmin,onDelete,onClose}) {
   );
 }
 
-function AdminLoginModal({onSuccess,onClose,s,tc,adminPassword}) {
-  const [pw,setPw] = useState("");
-  const [err,setErr] = useState(false);
+// ── Modals ────────────────────────────────────────────────────────────────────
+function AdminLoginModal({onSuccess, onClose, s, tc, adminPassword}) {
+  const [pw,setPw]=useState(""); const [err,setErr]=useState(false);
   function attempt(){if(pw===adminPassword){onSuccess();}else{setErr(true);setPw("");setTimeout(()=>setErr(false),2000);}}
   return (
     <div>
@@ -188,8 +391,8 @@ function AdminLoginModal({onSuccess,onClose,s,tc,adminPassword}) {
   );
 }
 
-function PhotoAvatar({photo,number,size,tc,pid,onSave}) {
-  const ref = useRef();
+function PhotoAvatar({photo, number, size, pid, onSave}) {
+  const ref=useRef();
   function handleFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onSave(pid,ev.target.result);r.readAsDataURL(f);}
   return (
     <div style={{position:"relative",width:size,height:size,flexShrink:0,cursor:"pointer"}} onClick={()=>ref.current.click()}>
@@ -203,10 +406,11 @@ function PhotoAvatar({photo,number,size,tc,pid,onSave}) {
   );
 }
 
-function GameLog({games,isG,player,tc,s}) {
-  const [expanded,setExpanded] = useState(false);
-  const allReversed = [...games].reverse();
-  const displayed = expanded?allReversed:allReversed.slice(0,5);
+function GameLog({games, isG, player, tc, s, allPlayers}) {
+  const [expanded,setExpanded]=useState(false);
+  const [openBox,setOpenBox]=useState(null);
+  const allReversed=[...games].reverse();
+  const displayed=expanded?allReversed:allReversed.slice(0,5);
   return (
     <div style={{...s.card,marginBottom:14,padding:0,overflow:"hidden"}}>
       <div style={{background:tc,padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -218,17 +422,23 @@ function GameLog({games,isG,player,tc,s}) {
         :<>
           {displayed.map(g=>{
             const gs=isG?g.goalieStats?.[player.id]:g.skaterStats?.[player.id];
-            if(!gs)return null;
             const resColor=g.result==="W"?"#1a7a3c":g.result==="L"?"#c41a1a":"#777";
+            const isOpen=openBox===g.id;
             return (
-              <div key={g.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 16px",borderBottom:"0.5px solid #ddd",fontSize:14}}>
-                <div>
-                  <span style={{color:"#777",fontSize:12}}>{g.date}</span>
-                  <span style={{marginLeft:8,fontWeight:500}}>{"vs "+g.opponent}</span>
-                  {g.result&&<span style={{marginLeft:8,fontWeight:600,color:resColor}}>{g.result+(g.score?" "+g.score:"")}</span>}
-                  {g.gameType&&g.gameType!=="Regular Season"&&<span style={{marginLeft:6,fontSize:11,color:tc}}>{g.gameType}</span>}
+              <div key={g.id} style={{borderBottom:"0.5px solid #ddd"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 16px",fontSize:14}}>
+                  <div>
+                    <span style={{color:"#777",fontSize:12}}>{g.date}</span>
+                    <span style={{marginLeft:8,fontWeight:500}}>{"vs "+g.opponent}</span>
+                    {g.result&&<span style={{marginLeft:8,fontWeight:600,color:resColor}}>{g.result+(g.score?" "+g.score:"")}</span>}
+                    {g.gameType&&g.gameType!=="Regular Season"&&<span style={{marginLeft:6,fontSize:11,color:tc}}>{g.gameType}</span>}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{color:"#777",fontSize:13}}>{gs?(isG?("W:"+(gs.W||0)+" L:"+(gs.L||0)+" GA:"+(gs.GA||0)):("G:"+(gs.G||0)+" A:"+(gs.A||0)+" P:"+((gs.G||0)+(gs.A||0)))):"—"}</span>
+                    {allPlayers&&allPlayers.length>0&&<button onClick={()=>setOpenBox(isOpen?null:g.id)} style={{background:"none",border:"0.5px solid "+tc+"66",borderRadius:5,color:tc,fontSize:11,cursor:"pointer",padding:"2px 7px",fontWeight:600,whiteSpace:"nowrap"}}>{isOpen?"↑":"↓"}</button>}
+                  </div>
                 </div>
-                <span style={{color:"#777",fontSize:13}}>{isG?("W:"+(gs.W||0)+" L:"+(gs.L||0)+" GA:"+(gs.GA||0)):("G:"+(gs.G||0)+" A:"+(gs.A||0)+" P:"+((gs.G||0)+(gs.A||0)))}</span>
+                {isOpen&&<div style={{padding:"0 12px 12px"}}><BoxScore game={g} players={allPlayers} tc={tc}/></div>}
               </div>
             );
           })}
@@ -239,77 +449,18 @@ function GameLog({games,isG,player,tc,s}) {
   );
 }
 
-function PlayerModal({modal,onSave,onDelete,onClose,s,tc,teamSeasons}) {
-  const isEdit = modal.type==="editPlayer";
-  const allSeasons = teamSeasons.filter(sv=>sv!=="All Time");
-  const [form,setForm] = useState(isEdit?{...modal.player,activeSeasons:modal.player.activeSeasons||[...allSeasons]}:{name:"",number:"",position:"C",activeSeasons:[...allSeasons]});
-  const [confirmDelete,setConfirmDelete] = useState(false);
-  const set = (k,v)=>setForm(f=>({...f,[k]:v}));
-  function toggleSeason(sv){const cur=form.activeSeasons||[];set("activeSeasons",cur.includes(sv)?cur.filter(s=>s!==sv):[...cur,sv]);}
+function CompletedGameFields({players, s, tc, onClose, onSave}) {
+  const [score,setScore]=useState(""); const [result,setResult]=useState("W");
+  const [skaterStats,setSkaterStats]=useState({}); const [goalieStats,setGoalieStats]=useState({});
+  const skaters=(players||[]).filter(p=>p.position!=="G"); const goalies=(players||[]).filter(p=>p.position==="G");
+  const setSS=(pid,k,v)=>setSkaterStats(prev=>({...prev,[pid]:{...prev[pid],[k]:parseInt(v)||0}}));
+  const setGS=(pid,k,v)=>setGoalieStats(prev=>({...prev,[pid]:{...prev[pid],[k]:parseInt(v)||0}}));
+  const si={...s.input,padding:"5px 6px",fontSize:13,textAlign:"center"};
   return (
     <div>
-      <div style={{fontWeight:500,fontSize:17,marginBottom:16}}>{isEdit?"Edit Player":"Add Player"}</div>
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <input style={s.input} placeholder="Full name" value={form.name} onChange={e=>set("name",e.target.value)}/>
-        <input style={s.input} placeholder="Jersey number" value={form.number} onChange={e=>set("number",e.target.value)}/>
-        <select style={s.input} value={form.position} onChange={e=>set("position",e.target.value)}>{POSITIONS.map(p=><option key={p} value={p}>{p}</option>)}</select>
-        <div>
-          <div style={{fontSize:13,fontWeight:500,color:"#777",marginBottom:8}}>Active Seasons</div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {allSeasons.map(sv=>{
-              const active=(form.activeSeasons||[]).includes(sv);
-              return (
-                <button key={sv} onClick={()=>toggleSeason(sv)} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:active?"2px solid "+tc:"0.5px solid #ccc",background:active?tc+"11":"#fff",cursor:"pointer",textAlign:"left"}}>
-                  <div style={{width:18,height:18,borderRadius:4,border:"2px solid "+(active?tc:"#ccc"),background:active?tc:"transparent",flexShrink:0}}/>
-                  <span style={{fontSize:13,color:active?tc:"#222",fontWeight:active?500:400}}>{sv}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-      {confirmDelete&&<div style={{marginTop:14,background:"#fdecea",border:"1px solid #c41a1a",borderRadius:8,padding:"12px 14px"}}>
-        <div style={{fontWeight:500,fontSize:14,color:"#c41a1a",marginBottom:10}}>{"Delete "+form.name+"? This cannot be undone."}</div>
-        <div style={{display:"flex",gap:8}}>
-          <button style={{...s.sec,flex:1}} onClick={()=>setConfirmDelete(false)}>Cancel</button>
-          <button style={{flex:1,background:"#c41a1a",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:500}} onClick={()=>onDelete(form.id)}>Yes, Delete</button>
-        </div>
-      </div>}
-      {!confirmDelete&&<div style={{display:"flex",gap:8,marginTop:16}}>
-        <button style={s.sec} onClick={onClose}>Cancel</button>
-        {isEdit&&<button style={{...s.sec,color:"#c41a1a",borderColor:"#c41a1a"}} onClick={()=>setConfirmDelete(true)}>Delete</button>}
-        <button style={{...s.btn,flex:1}} onClick={()=>form.name&&onSave(form,isEdit)}>Save</button>
-      </div>}
-    </div>
-  );
-}
-
-function GameModal({modal,players,seasons,defaultSeason,onSave,onClose,s,tc}) {
-  const [date,setDate] = useState(new Date().toISOString().slice(0,10));
-  const [opponent,setOpponent] = useState("");
-  const [score,setScore] = useState("");
-  const [result,setResult] = useState("W");
-  const [gameSeason,setGameSeason] = useState(defaultSeason||seasons[0]);
-  const [gameType,setGameType] = useState("Regular Season");
-  const [skaterStats,setSkaterStats] = useState({});
-  const [goalieStats,setGoalieStats] = useState({});
-  const skaters = players.filter(p=>p.position!=="G");
-  const goalies = players.filter(p=>p.position==="G");
-  const setSS = (pid,k,v)=>setSkaterStats(prev=>({...prev,[pid]:{...prev[pid],[k]:parseInt(v)||0}}));
-  const setGS = (pid,k,v)=>setGoalieStats(prev=>({...prev,[pid]:{...prev[pid],[k]:parseInt(v)||0}}));
-  const si = {...s.input,padding:"5px 6px",fontSize:13,textAlign:"center"};
-  return (
-    <div>
-      <div style={{fontWeight:500,fontSize:17,marginBottom:16}}>Add Game</div>
-      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-        <select style={s.input} value={gameSeason} onChange={e=>setGameSeason(e.target.value)}>{seasons.map(sv=><option key={sv} value={sv}>{sv}</option>)}</select>
-        <select style={s.input} value={gameType} onChange={e=>setGameType(e.target.value)}>{GAME_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>
-        <input type="date" style={s.input} value={date} onChange={e=>setDate(e.target.value)}/>
-        <input style={s.input} placeholder="Opponent team name" value={opponent} onChange={e=>setOpponent(e.target.value)}/>
-        <div style={{display:"flex",gap:8}}>
-          <input style={{...s.input,flex:1}} placeholder="Score (e.g. 5-3)" value={score} onChange={e=>setScore(e.target.value)}/>
-          <select style={{...s.input,width:"auto"}} value={result} onChange={e=>setResult(e.target.value)}>{["W","L","T","OTL"].map(r=><option key={r} value={r}>{r}</option>)}</select>
-        </div>
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <input style={{...s.input,flex:1}} placeholder="Score (e.g. 5-3)" value={score} onChange={e=>setScore(e.target.value)}/>
+        <select style={{...s.input,width:"auto"}} value={result} onChange={e=>setResult(e.target.value)}>{["W","L","T","OTL"].map(r=><option key={r} value={r}>{r}</option>)}</select>
       </div>
       {skaters.length>0&&<div style={{marginBottom:14}}>
         <div style={{fontWeight:500,fontSize:14,marginBottom:8,color:"#777"}}>Skater Stats</div>
@@ -341,18 +492,62 @@ function GameModal({modal,players,seasons,defaultSeason,onSave,onClose,s,tc}) {
       </div>}
       <div style={{display:"flex",gap:8,marginTop:8}}>
         <button style={s.sec} onClick={onClose}>Cancel</button>
-        <button style={{...s.btn,flex:1}} onClick={()=>opponent&&onSave({date,opponent,score,result,season:gameSeason,gameType,skaterStats,goalieStats})}>Save Game</button>
+        <button style={{...s.btn,flex:1}} onClick={()=>onSave({score,result,skaterStats,goalieStats})}>Save Game</button>
       </div>
     </div>
   );
 }
 
-function EditStatsModal({modal,onSave,onClose,s,tc}) {
-  const {player} = modal;
-  const isG = player.position==="G";
-  const cols = isG?GOALIE_COLS.filter(c=>c!=="GAA"):SKATER_COLS.filter(c=>c!=="P"&&c!=="PPG");
-  const [vals,setVals] = useState({...modal.vals});
-  const set = (k,v)=>setVals(prev=>({...prev,[k]:parseInt(v)||0}));
+function AddGameModal({players, seasons, defaultSeason, onSave, onClose, s, tc}) {
+  const [date,setDate]=useState(new Date().toISOString().slice(0,10));
+  const [time,setTime]=useState(""); const [location,setLocation]=useState("");
+  const [opponent,setOpponent]=useState("");
+  const [gameSeason,setGameSeason]=useState(defaultSeason||seasons[0]||"");
+  const [gameType,setGameType]=useState("Regular Season");
+  const [isUpcoming,setIsUpcoming]=useState(false);
+  const noSeasons=seasons.length===0;
+  return (
+    <div>
+      <div style={{fontWeight:500,fontSize:17,marginBottom:16}}>Add Game</div>
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <button onClick={()=>setIsUpcoming(false)} style={{flex:1,padding:"9px",borderRadius:8,border:"2px solid "+(isUpcoming?"#ddd":tc),background:isUpcoming?"#fff":tc+"11",color:isUpcoming?"#777":tc,cursor:"pointer",fontSize:13,fontWeight:500}}>Completed</button>
+        <button onClick={()=>setIsUpcoming(true)} style={{flex:1,padding:"9px",borderRadius:8,border:"2px solid "+(isUpcoming?tc:"#ddd"),background:isUpcoming?tc+"11":"#fff",color:isUpcoming?tc:"#777",cursor:"pointer",fontSize:13,fontWeight:500}}>Upcoming</button>
+      </div>
+      {noSeasons&&<div style={{fontSize:13,color:"#c41a1a",padding:"8px 10px",background:"#fdecea",borderRadius:8,marginBottom:12}}>No seasons yet. Add a season in Settings first.</div>}
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+        {!noSeasons&&<select style={s.input} value={gameSeason} onChange={e=>setGameSeason(e.target.value)}>{seasons.map(sv=><option key={sv} value={sv}>{sv}</option>)}</select>}
+        <select style={s.input} value={gameType} onChange={e=>setGameType(e.target.value)}>{GAME_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+        <input type="date" style={s.input} value={date} onChange={e=>setDate(e.target.value)}/>
+        <input style={s.input} placeholder="Time (e.g. 7:30 PM)" value={time} onChange={e=>setTime(e.target.value)}/>
+        <input style={s.input} placeholder="Location (optional)" value={location} onChange={e=>setLocation(e.target.value)}/>
+        <input style={s.input} placeholder="Opponent team name" value={opponent} onChange={e=>setOpponent(e.target.value)}/>
+      </div>
+      {isUpcoming
+        ?<div style={{display:"flex",gap:8}}>
+          <button style={s.sec} onClick={onClose}>Cancel</button>
+          <button style={{...s.btn,flex:1}} disabled={noSeasons||!opponent} onClick={()=>opponent&&onSave({date,time,location,opponent,season:gameSeason,gameType})}>Save Game</button>
+        </div>
+        :<CompletedGameFields players={players} s={s} tc={tc} onClose={onClose} onSave={extra=>onSave({date,time,location,opponent,season:gameSeason,gameType,...extra})}/>
+      }
+    </div>
+  );
+}
+
+function EnterResultModal({game, players, onSave, onClose, s, tc}) {
+  return (
+    <div>
+      <div style={{fontWeight:500,fontSize:17,marginBottom:4}}>Enter Result</div>
+      <div style={{fontSize:13,color:"#777",marginBottom:16}}>vs {game.opponent} - {game.date}{game.time?" at "+game.time:""}</div>
+      <CompletedGameFields players={players} s={s} tc={tc} onClose={onClose} onSave={extra=>onSave(game.id,extra)}/>
+    </div>
+  );
+}
+
+function EditStatsModal({modal, onSave, onClose, s, tc}) {
+  const {player}=modal; const isG=player.position==="G";
+  const cols=isG?GOALIE_COLS.filter(c=>c!=="GAA"):SKATER_COLS.filter(c=>c!=="P"&&c!=="PPG");
+  const [vals,setVals]=useState({...modal.vals});
+  const set=(k,v)=>setVals(prev=>({...prev,[k]:parseInt(v)||0}));
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
@@ -376,11 +571,66 @@ function EditStatsModal({modal,onSave,onClose,s,tc}) {
   );
 }
 
-function PasswordCard({onSavePassword,s}) {
-  const [newPw,setNewPw] = useState("");
-  const [confirm,setConfirm] = useState("");
-  const [error,setError] = useState("");
-  const [saved,setSaved] = useState(false);
+function PlayerModal({modal, onSave, onDelete, onClose, s, tc, teamSeasons}) {
+  const isEdit=modal.type==="editPlayer";
+  const allSeasons=teamSeasons.filter(sv=>sv!=="All Time");
+  const [form,setForm]=useState(isEdit?{...modal.player,activeSeasons:modal.player.activeSeasons||[...allSeasons]}:{name:"",number:"",position:"C",activeSeasons:[...allSeasons]});
+  const [confirmDelete,setConfirmDelete]=useState(false);
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  function toggleSeason(sv){const cur=form.activeSeasons||[];set("activeSeasons",cur.includes(sv)?cur.filter(s=>s!==sv):[...cur,sv]);}
+  return (
+    <div>
+      <div style={{fontWeight:500,fontSize:17,marginBottom:16}}>{isEdit?"Edit Player":"Add Player"}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <input style={s.input} placeholder="Full name" value={form.name} onChange={e=>set("name",e.target.value)}/>
+        <input style={s.input} placeholder="Jersey number" value={form.number} onChange={e=>set("number",e.target.value)}/>
+        <select style={s.input} value={form.position} onChange={e=>set("position",e.target.value)}>{POSITIONS.map(p=><option key={p} value={p}>{p}</option>)}</select>
+        <div>
+          <div style={{fontSize:13,fontWeight:500,color:"#777",marginBottom:8}}>Captain Status</div>
+          <div style={{display:"flex",gap:8}}>
+            {[{val:"",label:"None"},{val:"C",label:"Captain (C)"},{val:"A",label:"Alternate (A)"}].map(opt=>{
+              const active=form.captainRole===opt.val;
+              return <button key={opt.val} onClick={()=>set("captainRole",opt.val)} style={{flex:1,padding:"8px 4px",borderRadius:8,border:active?"2px solid "+tc:"0.5px solid #ccc",background:active?tc+"11":"#fff",color:active?tc:"#777",cursor:"pointer",fontSize:13,fontWeight:active?600:400}}>{opt.label}</button>;
+            })}
+          </div>
+        </div>
+        {allSeasons.length>0&&<div>
+          <div style={{fontSize:13,fontWeight:500,color:"#777",marginBottom:8}}>Active Seasons</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {allSeasons.map(sv=>{
+              const active=(form.activeSeasons||[]).includes(sv);
+              return (
+                <button key={sv} onClick={()=>toggleSeason(sv)} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:active?"2px solid "+tc:"0.5px solid #ccc",background:active?tc+"11":"#fff",cursor:"pointer",textAlign:"left"}}>
+                  <div style={{width:18,height:18,borderRadius:4,border:"2px solid "+(active?tc:"#ccc"),background:active?tc:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    {active&&<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+                  <span style={{fontSize:13,color:active?tc:"#222",fontWeight:active?500:400}}>{sv}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>}
+      </div>
+      {confirmDelete&&<div style={{marginTop:14,background:"#fdecea",border:"1px solid #c41a1a",borderRadius:8,padding:"12px 14px"}}>
+        <div style={{fontWeight:500,fontSize:14,color:"#c41a1a",marginBottom:10}}>{"Delete "+form.name+"? This cannot be undone."}</div>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{...s.sec,flex:1}} onClick={()=>setConfirmDelete(false)}>Cancel</button>
+          <button style={{flex:1,background:"#c41a1a",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:500}} onClick={()=>onDelete(form.id)}>Yes, Delete</button>
+        </div>
+      </div>}
+      {!confirmDelete&&<div style={{display:"flex",gap:8,marginTop:16}}>
+        <button style={s.sec} onClick={onClose}>Cancel</button>
+        {isEdit&&<button style={{...s.sec,color:"#c41a1a",borderColor:"#c41a1a"}} onClick={()=>setConfirmDelete(true)}>Delete</button>}
+        <button style={{...s.btn,flex:1}} onClick={()=>form.name&&onSave(form,isEdit)}>Save</button>
+      </div>}
+    </div>
+  );
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+function PasswordCard({onSavePassword, s}) {
+  const [newPw,setNewPw]=useState(""); const [confirm,setConfirm]=useState("");
+  const [error,setError]=useState(""); const [saved,setSaved]=useState(false);
   function handleSave(){
     if(!newPw){setError("Password cannot be empty.");return;}
     if(newPw!==confirm){setError("Passwords do not match.");return;}
@@ -399,22 +649,35 @@ function PasswordCard({onSavePassword,s}) {
   );
 }
 
-function TeamSettingsCard({tid,team,logo,font,onSaveLogo,onSaveFont,onSaveName,onSaveColor,canDelete,onDeleteTeam,s}) {
-  const logoRef=useRef(), fontRef=useRef();
-  const [name,setName] = useState(team.name);
-  const [savedName,setSavedName] = useState(false);
-  const [color,setColor] = useState(team.color);
-  const [colorError,setColorError] = useState(false);
-  const [savedColor,setSavedColor] = useState(false);
-  const [confirmDelete,setConfirmDelete] = useState(false);
-  function handleLogoFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onSaveLogo(tid,ev.target.result);r.readAsDataURL(f);}
+function LogoUploader({label, logo, color, onSave, onRemove, hint}) {
+  const ref=useRef();
+  function handleFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onSave(ev.target.result);r.readAsDataURL(f);}
+  return (
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:13,fontWeight:500,color:"#777",marginBottom:8}}>{label}</div>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:60,height:60,borderRadius:10,border:"2px dashed "+(logo?color:"#ccc"),background:"#f5f5f5",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+          {logo?<img src={logo} style={{width:"100%",height:"100%",objectFit:"contain",padding:4}}/>:<span style={{fontSize:24,color:"#ccc"}}>+</span>}
+        </div>
+        <div>
+          <button onClick={()=>ref.current.click()} style={{background:color,color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:13,fontWeight:500}}>{logo?"Change":"Upload"}</button>
+          {logo&&<button onClick={onRemove} style={{background:"#f5f5f5",color:"#c41a1a",border:"0.5px solid #c41a1a",borderRadius:8,padding:"7px 10px",cursor:"pointer",fontSize:12,marginLeft:8}}>Remove</button>}
+          {hint&&<div style={{fontSize:11,color:"#aaa",marginTop:5}}>{hint}</div>}
+        </div>
+        <input ref={ref} type="file" accept="image/*,.svg" style={{display:"none"}} onChange={handleFile}/>
+      </div>
+    </div>
+  );
+}
+
+function TeamSettingsCard({tid, team, logo, secondaryLogo, font, onSaveLogo, onSaveSecondaryLogo, onSaveFont, onSaveName, onSaveColor, canDelete, onDeleteTeam, s}) {
+  const fontRef=useRef();
+  const [name,setName]=useState(team.name); const [savedName,setSavedName]=useState(false);
+  const [color,setColor]=useState(team.color); const [colorError,setColorError]=useState(false); const [savedColor,setSavedColor]=useState(false);
+  const [confirmDelete,setConfirmDelete]=useState(false);
   function handleFontFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onSaveFont(tid,ev.target.result);r.readAsDataURL(f);}
   function handleSaveName(){onSaveName(tid,name);setSavedName(true);setTimeout(()=>setSavedName(false),2000);}
-  function handleSaveColor(){
-    const hex=color.startsWith("#")?color:"#"+color;
-    if(!/^#[0-9A-Fa-f]{6}$/.test(hex)){setColorError(true);setTimeout(()=>setColorError(false),2000);return;}
-    onSaveColor(tid,hex);setColor(hex);setSavedColor(true);setTimeout(()=>setSavedColor(false),2000);
-  }
+  function handleSaveColor(){const hex=color.startsWith("#")?color:"#"+color;if(!/^#[0-9A-Fa-f]{6}$/.test(hex)){setColorError(true);setTimeout(()=>setColorError(false),2000);return;}onSaveColor(tid,hex);setColor(hex);setSavedColor(true);setTimeout(()=>setSavedColor(false),2000);}
   const previewColor=(()=>{const hex=color.startsWith("#")?color:"#"+color;return /^#[0-9A-Fa-f]{6}$/.test(hex)?hex:team.color;})();
   return (
     <div style={{background:"#fff",border:"0.5px solid #ddd",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
@@ -428,20 +691,10 @@ function TeamSettingsCard({tid,team,logo,font,onSaveLogo,onSaveFont,onSaveName,o
           <button onClick={()=>setConfirmDelete(false)} style={{...s.sec,fontSize:12,padding:"4px 10px"}}>No</button>
         </div>}
       </div>
-      <div style={{marginBottom:14}}>
-        <div style={{fontSize:13,fontWeight:500,color:"#777",marginBottom:8}}>Team Logo</div>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:60,height:60,borderRadius:10,border:"2px dashed "+(logo?team.color:"#ccc"),background:"#f5f5f5",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
-            {logo?<img src={logo} style={{width:"100%",height:"100%",objectFit:"contain",padding:4}}/>:<span style={{fontSize:24,color:"#ccc"}}>+</span>}
-          </div>
-          <div>
-            <button onClick={()=>logoRef.current.click()} style={{...s.btn,fontSize:13,padding:"7px 14px"}}>{logo?"Change Logo":"Upload Logo"}</button>
-            {logo&&<button onClick={()=>onSaveLogo(tid,null)} style={{...s.sec,fontSize:12,padding:"5px 10px",marginLeft:8,color:"#c41a1a",borderColor:"#c41a1a"}}>Remove</button>}
-            <div style={{fontSize:11,color:"#aaa",marginTop:5}}>PNG, JPG or SVG</div>
-          </div>
-          <input ref={logoRef} type="file" accept="image/*,.svg" style={{display:"none"}} onChange={handleLogoFile}/>
-        </div>
-      </div>
+
+      <LogoUploader label="Team Logo (header)" logo={logo} color={team.color} onSave={url=>onSaveLogo(tid,url)} onRemove={()=>onSaveLogo(tid,null)} hint="Shown in the team header"/>
+      <LogoUploader label="Secondary Logo (cards)" logo={secondaryLogo} color={team.color} onSave={url=>onSaveSecondaryLogo(tid,url)} onRemove={()=>onSaveSecondaryLogo(tid,null)} hint="Watermark on game recap & up next cards"/>
+
       <div style={{marginBottom:14}}>
         <div style={{fontSize:13,fontWeight:500,color:"#777",marginBottom:8}}>Team Font</div>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -449,34 +702,103 @@ function TeamSettingsCard({tid,team,logo,font,onSaveLogo,onSaveFont,onSaveName,o
             <span style={{fontFamily:font?("'TeamFont_"+tid+"', sans-serif"):"inherit",fontSize:22,fontWeight:700,color:font?team.color:"#bbb"}}>Aa</span>
           </div>
           <div>
-            <button onClick={()=>fontRef.current.click()} style={{...s.btn,fontSize:13,padding:"7px 14px"}}>{font?"Change Font":"Upload Font"}</button>
+            <button onClick={()=>fontRef.current.click()} style={{background:team.color,color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:13,fontWeight:500}}>{font?"Change Font":"Upload Font"}</button>
             {font&&<button onClick={()=>onSaveFont(tid,null)} style={{...s.sec,fontSize:12,padding:"5px 10px",marginLeft:8,color:"#c41a1a",borderColor:"#c41a1a"}}>Remove</button>}
             <div style={{fontSize:11,color:"#aaa",marginTop:5}}>.ttf or .otf file</div>
           </div>
           <input ref={fontRef} type="file" accept=".ttf,.otf,.woff,.woff2" style={{display:"none"}} onChange={handleFontFile}/>
         </div>
       </div>
+
       <div style={{marginBottom:14}}>
         <div style={{fontSize:13,fontWeight:500,color:"#777",marginBottom:8}}>Team Color</div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <div style={{width:40,height:40,borderRadius:8,background:previewColor,border:"0.5px solid #ddd",flexShrink:0}}/>
           <input style={{...s.input,flex:1,fontFamily:"monospace"}} value={color} placeholder="#223E54" onChange={e=>setColor(e.target.value)}/>
-          <button onClick={handleSaveColor} style={{...s.btn,whiteSpace:"nowrap"}}>{savedColor?"Saved":"Save"}</button>
+          <button onClick={handleSaveColor} style={{background:team.color,color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:500,whiteSpace:"nowrap"}}>{savedColor?"Saved":"Save"}</button>
         </div>
-        {colorError&&<div style={{fontSize:12,color:"#c41a1a",marginTop:6}}>Please enter a valid hex color (e.g. #223E54)</div>}
+        {colorError&&<div style={{fontSize:12,color:"#c41a1a",marginTop:6}}>Please enter a valid hex color</div>}
       </div>
+
       <div>
         <div style={{fontSize:13,fontWeight:500,color:"#777",marginBottom:8}}>Team Name</div>
         <div style={{display:"flex",gap:8}}>
           <input style={{...s.input,flex:1}} value={name} onChange={e=>setName(e.target.value)}/>
-          <button onClick={handleSaveName} style={{...s.btn,whiteSpace:"nowrap"}}>{savedName?"Saved":"Save"}</button>
+          <button onClick={handleSaveName} style={{background:team.color,color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:500,whiteSpace:"nowrap"}}>{savedName?"Saved":"Save"}</button>
         </div>
       </div>
     </div>
   );
 }
 
-function SettingsPage({data,teamLogos,teamFonts,teamOrder,onMoveTeam,onAddTeam,onSaveLogo,onSaveFont,onSaveName,onSaveColor,onDeleteTeam,onSavePassword,s}) {
+function SeasonCard({tid, team, seasons, players, onAddSeason, onDeleteSeason, s}) {
+  const [expanded,setExpanded]=useState(false);
+  const [name,setName]=useState(""); const [checked,setChecked]=useState({});
+  const [error,setError]=useState(""); const [confirmDelete,setConfirmDelete]=useState(null);
+  const allSeasons=seasons.filter(sv=>sv!=="All Time");
+  function startAdding(){const init={};(players||[]).forEach(p=>{init[p.id]=true;});setChecked(init);setName("");setError("");setExpanded(true);}
+  function handleSave(){const n=name.trim();if(!n){setError("Please enter a season name.");return;}if(allSeasons.includes(n)){setError("A season with that name already exists.");return;}onAddSeason(tid,n,Object.keys(checked).filter(id=>checked[id]));setExpanded(false);setName("");}
+  function toggleAll(val){const next={};(players||[]).forEach(p=>{next[p.id]=val;});setChecked(next);}
+  return (
+    <div style={{background:"#fff",border:"0.5px solid #ddd",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <div style={{width:10,height:32,borderRadius:3,background:team.color,flexShrink:0}}/>
+        <span style={{flex:1,fontWeight:600,fontSize:15}}>{team.name} — Seasons</span>
+      </div>
+      {allSeasons.length===0&&<div style={{fontSize:13,color:"#aaa",marginBottom:12,fontStyle:"italic"}}>No seasons yet.</div>}
+      <div style={{marginBottom:12}}>
+        {allSeasons.map((sv,i)=>(
+          <div key={sv} style={{display:"flex",alignItems:"center",padding:"6px 0",borderBottom:i<allSeasons.length-1?"0.5px solid #f0f0f0":"none"}}>
+            <span style={{flex:1,fontSize:13,color:"#444"}}>{sv}</span>
+            {confirmDelete===sv
+              ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <span style={{fontSize:11,color:"#c41a1a"}}>Delete?</span>
+                <button onClick={()=>{onDeleteSeason(tid,sv);setConfirmDelete(null);}} style={{background:"#c41a1a",color:"#fff",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>Yes</button>
+                <button onClick={()=>setConfirmDelete(null)} style={{background:"#f0f0f0",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>No</button>
+              </div>
+              :<button onClick={()=>setConfirmDelete(sv)} style={{background:"none",border:"none",color:"#ccc",cursor:"pointer",fontSize:18,lineHeight:1,padding:"0 4px"}}>×</button>
+            }
+          </div>
+        ))}
+      </div>
+      {!expanded&&<button onClick={startAdding} style={{background:team.color,color:"#fff",border:"none",borderRadius:8,padding:"10px",cursor:"pointer",fontSize:14,fontWeight:500,width:"100%"}}>+ Add New Season</button>}
+      {expanded&&<div>
+        <div style={{fontSize:13,fontWeight:500,color:"#777",marginBottom:6}}>Season Name</div>
+        <input style={{...s.input,marginBottom:error?6:12}} placeholder="e.g. Summer 2026" value={name} onChange={e=>{setName(e.target.value);setError("");}}/>
+        {error&&<div style={{fontSize:12,color:"#c41a1a",marginBottom:10}}>{error}</div>}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{fontSize:13,fontWeight:500,color:"#777"}}>Carry over players</div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>toggleAll(true)} style={{...s.sec,fontSize:12,padding:"4px 10px"}}>All</button>
+            <button onClick={()=>toggleAll(false)} style={{...s.sec,fontSize:12,padding:"4px 10px"}}>None</button>
+          </div>
+        </div>
+        {(players||[]).length===0&&<div style={{fontSize:13,color:"#aaa",marginBottom:12}}>No players on roster yet.</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
+          {(players||[]).map(p=>{
+            const on=!!checked[p.id];
+            return (
+              <button key={p.id} onClick={()=>setChecked(prev=>({...prev,[p.id]:!prev[p.id]}))}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:on?"2px solid "+team.color:"0.5px solid #ccc",background:on?team.color+"11":"#fff",cursor:"pointer",textAlign:"left"}}>
+                <div style={{width:18,height:18,borderRadius:4,border:"2px solid "+(on?team.color:"#ccc"),background:on?team.color:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {on&&<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </div>
+                <span style={{fontSize:13,color:on?team.color:"#222",fontWeight:on?500:400}}>{p.name}</span>
+                <span style={{fontSize:12,color:"#aaa",marginLeft:"auto"}}>{"#"+p.number+" · "+p.position}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button style={s.sec} onClick={()=>setExpanded(false)}>Cancel</button>
+          <button style={{background:team.color,color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:500,flex:1}} onClick={handleSave}>Save Season</button>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+function SettingsPage({data, teamLogos, teamSecondaryLogos, teamFonts, teamOrder, onMoveTeam, onAddTeam, onAddSeason, onDeleteSeason, onSaveLogo, onSaveSecondaryLogo, onSaveFont, onSaveName, onSaveColor, onDeleteTeam, onSavePassword, s}) {
   return (
     <div>
       <div style={{fontWeight:500,fontSize:15,marginBottom:14,color:"#777"}}>Team Settings</div>
@@ -499,7 +821,10 @@ function SettingsPage({data,teamLogos,teamFonts,teamOrder,onMoveTeam,onAddTeam,o
         </div>
       )}
       {teamOrder.map(tid=>(
-        <TeamSettingsCard key={tid} tid={tid} team={data.teams[tid]} logo={teamLogos[tid]} font={teamFonts[tid]} onSaveLogo={onSaveLogo} onSaveFont={onSaveFont} onSaveName={onSaveName} onSaveColor={onSaveColor} canDelete={!BUILT_IN_TEAMS.includes(tid)} onDeleteTeam={onDeleteTeam} s={s}/>
+        <div key={tid}>
+          <SeasonCard tid={tid} team={data.teams[tid]} seasons={getTeamCfg(data,tid).seasons} players={data.players[tid]||[]} onAddSeason={onAddSeason} onDeleteSeason={onDeleteSeason} s={s}/>
+          <TeamSettingsCard tid={tid} team={data.teams[tid]} logo={teamLogos[tid]} secondaryLogo={teamSecondaryLogos[tid]} font={teamFonts[tid]} onSaveLogo={onSaveLogo} onSaveSecondaryLogo={onSaveSecondaryLogo} onSaveFont={onSaveFont} onSaveName={onSaveName} onSaveColor={onSaveColor} canDelete={teamOrder.length>1} onDeleteTeam={onDeleteTeam} s={s}/>
+        </div>
       ))}
       <button onClick={onAddTeam} style={{width:"100%",padding:"12px",borderRadius:10,border:"2px dashed #ccc",background:"#fff",color:"#777",cursor:"pointer",fontSize:14,fontWeight:500,marginBottom:16}}>+ Add Team</button>
       <PasswordCard onSavePassword={onSavePassword} s={s}/>
@@ -507,59 +832,51 @@ function SettingsPage({data,teamLogos,teamFonts,teamOrder,onMoveTeam,onAddTeam,o
   );
 }
 
+// ── App ───────────────────────────────────────────────────────────────────────
 function App() {
-  const [data,setData] = useState(()=>{
-    try {
-      const raw = localStorage.getItem("hockeyApp2");
-      const d = raw?JSON.parse(raw):initData();
-      if(!raw){d.teams.team1.name="High Life Hockey (D5)";d.teams.team2.name="Yetis (D6)";d.teams.team1.color="#223E54";d.teams.team2.color="#622B3C";}
-      if(!d.teamLogos)d.teamLogos={};
-      if(!d.playerPhotos)d.playerPhotos={};
-      if(!d.teamFonts)d.teamFonts={};
-      if(!d.adminPassword)d.adminPassword="admin";
-      if(!d.gallery)d.gallery={};
-      if(!d.teamOrder)d.teamOrder=Object.keys(d.teams);
-      Object.keys(d.teams).forEach(tid=>{
-        const cfg=getTeamCfg(d,tid);
-        (d.players[tid]||[]).forEach(p=>{if(!p.activeSeasons)p.activeSeasons=[...cfg.seasons.filter(s=>s!=="All Time")];});
-      });
-      localStorage.setItem("hockeyApp2",JSON.stringify(d));
-      return d;
-    } catch(e){return initData();}
-  });
+  const [data,setData]=useState(loadData);
+  const getInitialTeam=()=>(data.teamOrder||Object.keys(data.teams)).filter(tid=>data.teams[tid])[0]||"team1";
+  const [activeTeam,setActiveTeam]=useState(getInitialTeam);
+  const [season,setSeason]=useState(()=>{const cfg=getTeamCfg(data,getInitialTeam());return cfg.seasons[1]||"All Time";});
+  const [page,setPage]=useState("home");
+  const [selectedPlayer,setSelectedPlayer]=useState(null);
+  const [sortCol,setSortCol]=useState("P");
+  const [sortDir,setSortDir]=useState(-1);
+  const [modal,setModal]=useState(null);
+  const [isAdmin,setIsAdmin]=useState(false);
+  const [lightbox,setLightbox]=useState(null);
 
-  const [activeTeam,setActiveTeam] = useState("team1");
-  const [season,setSeason] = useState("Winter 2025-2026");
-  const [page,setPage] = useState("home");
-  const [selectedPlayer,setSelectedPlayer] = useState(null);
-  const [sortCol,setSortCol] = useState("P");
-  const [sortDir,setSortDir] = useState(-1);
-  const [modal,setModal] = useState(null);
-  const [isAdmin,setIsAdmin] = useState(false);
-  const [lightbox,setLightbox] = useState(null);
+  function save(d){setData(d);saveData(d);}
+  function cloneData(){return JSON.parse(JSON.stringify(data));}
 
-  const save = d=>{setData(d);try{localStorage.setItem("hockeyApp2",JSON.stringify(d));}catch(e){}};
-  const teamCfg = getTeamCfg(data,activeTeam);
-  const team = data.teams[activeTeam];
-  const players = data.players[activeTeam]||[];
-  const games = data.games[activeTeam]||[];
-  const tc = team.color;
-  const seasons = teamCfg.seasons;
-  const teamLogos = data.teamLogos||{};
-  const teamFonts = data.teamFonts||{};
-  const fontStyle = teamFonts[activeTeam]?("'TeamFont_"+activeTeam+"', sans-serif"):"inherit";
-  const activePlayers = season==="All Time"?players:players.filter(p=>(p.activeSeasons||[]).includes(season));
-  const skaters = activePlayers.filter(p=>p.position!=="G");
-  const goalies = activePlayers.filter(p=>p.position==="G");
-  const getStats = p=>computeStats(p,games,data.statOverrides,season,seasons);
-  const statsCache = {};
-  const getCachedStats = p=>{if(!statsCache[p.id])statsCache[p.id]=computeStats(p,games,data.statOverrides,season,seasons);return statsCache[p.id];};
-  const sortSkaters = arr=>[...arr].sort((a,b)=>(parseFloat(getCachedStats(b)[sortCol])||0)-(parseFloat(getCachedStats(a)[sortCol])||0));
-  const sortGoalies = arr=>[...arr].sort((a,b)=>(parseFloat(getCachedStats(b)["W"])||0)-(parseFloat(getCachedStats(a)["W"])||0));
-  const teamOrder = (data.teamOrder||Object.keys(data.teams)).filter(tid=>data.teams[tid]);
+  const teamCfg=getTeamCfg(data,activeTeam);
+  const team=data.teams[activeTeam];
+  const players=data.players[activeTeam]||[];
+  const games=data.games[activeTeam]||[];
+  const tc=team.color;
+  const seasons=teamCfg.seasons;
+  const teamLogos=data.teamLogos||{};
+  const teamSecondaryLogos=data.teamSecondaryLogos||{};
+  const teamFonts=data.teamFonts||{};
+  const fontStyle=teamFonts[activeTeam]?("'TeamFont_"+activeTeam+"', sans-serif"):"inherit";
+  const activePlayers=(season==="All Time"?players:players.filter(p=>(p.activeSeasons||[]).includes(season))).slice().sort((a,b)=>parseInt(a.number||0)-parseInt(b.number||0));
+  const skaters=activePlayers.filter(p=>p.position!=="G");
+  const goalies=activePlayers.filter(p=>p.position==="G");
+  const teamOrder=(data.teamOrder||Object.keys(data.teams)).filter(tid=>data.teams[tid]);
   function requireAdmin(fn){if(isAdmin){fn();return;}setModal({type:"adminLogin",onSuccess:fn});}
 
-  const s = {
+  const statsCache={};
+  const getStats=p=>{if(!statsCache[p.id])statsCache[p.id]=computeStats(p,games,data.statOverrides,season,seasons);return statsCache[p.id];};
+  const sortSkaters=arr=>[...arr].sort((a,b)=>(parseFloat(getStats(b)[sortCol])||0)-(parseFloat(getStats(a)[sortCol])||0));
+  const sortGoalies=arr=>[...arr].sort((a,b)=>(parseFloat(getStats(b)["W"])||0)-(parseFloat(getStats(a)["W"])||0));
+
+  const filteredGames=season==="All Time"?games:games.filter(g=>g.season===season);
+  // Upcoming: soonest first. Completed: most recent date first
+  const upcomingGames=[...filteredGames].filter(g=>!g.result).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const completedGames=[...filteredGames].filter(g=>!!g.result).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const nextGame=upcomingGames[0]||null;
+
+  const s={
     btn:{background:tc,color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:500},
     sec:{background:"#f5f5f5",color:"#222",border:"0.5px solid #ccc",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:14},
     input:{width:"100%",padding:"8px 10px",border:"0.5px solid #ccc",borderRadius:8,background:"#fff",color:"#222",fontSize:14,boxSizing:"border-box"},
@@ -568,30 +885,47 @@ function App() {
     card:{background:"#fff",border:"0.5px solid #ddd",borderRadius:10,padding:"12px 16px",marginBottom:10}
   };
 
-  function savePlayer(p,isEdit){const d=JSON.parse(JSON.stringify(data));if(isEdit)d.players[activeTeam]=d.players[activeTeam].map(x=>x.id===p.id?p:x);else d.players[activeTeam].push({...p,id:"p"+Date.now()});save(d);setModal(null);}
-  function deletePlayer(id){const d=JSON.parse(JSON.stringify(data));d.players[activeTeam]=d.players[activeTeam].filter(p=>p.id!==id);save(d);setModal(null);if(selectedPlayer&&selectedPlayer.id===id){setSelectedPlayer(null);setPage("roster");}}
-  function saveGame(game){const d=JSON.parse(JSON.stringify(data));d.games[activeTeam].push({...game,id:"g"+Date.now()});save(d);setModal(null);setPage("home");}
-  function deleteGame(gid){const d=JSON.parse(JSON.stringify(data));d.games[activeTeam]=d.games[activeTeam].filter(g=>g.id!==gid);save(d);}
-  function saveStatOverride(player,vals){const d=JSON.parse(JSON.stringify(data));d.statOverrides[player.id+"_"+season]={...vals};save(d);setModal(null);}
-  function savePhoto(pid,url){const d=JSON.parse(JSON.stringify(data));d.playerPhotos[pid]=url;save(d);}
-  function saveTeamLogo(tid,url){const d=JSON.parse(JSON.stringify(data));d.teamLogos[tid]=url;save(d);}
-  function saveTeamFont(tid,url){const d=JSON.parse(JSON.stringify(data));d.teamFonts[tid]=url;save(d);}
-  function saveTeamName(tid,name){const d=JSON.parse(JSON.stringify(data));d.teams[tid].name=name;save(d);}
-  function saveTeamColor(tid,color){const d=JSON.parse(JSON.stringify(data));d.teams[tid].color=color;save(d);}
-  function saveAdminPassword(pw){const d=JSON.parse(JSON.stringify(data));d.adminPassword=pw;save(d);}
-  function addTeam(){const d=JSON.parse(JSON.stringify(data));const tid="team"+Date.now();d.teams[tid]={name:"New Team",color:"#444444"};d.players[tid]=[];d.games[tid]=[];d.teamOrder=[...(d.teamOrder||[]),tid];save(d);setActiveTeam(tid);setSeason("Winter 2025-2026");setPage("settings");setModal(null);}
-  function deleteTeam(tid){const d=JSON.parse(JSON.stringify(data));delete d.teams[tid];delete d.players[tid];delete d.games[tid];if(d.teamLogos)delete d.teamLogos[tid];if(d.teamFonts)delete d.teamFonts[tid];d.teamOrder=(d.teamOrder||[]).filter(id=>id!==tid);save(d);setActiveTeam("team1");setSeason(getTeamCfg(d,"team1").seasons[1]);setPage("home");}
-  function addGalleryPhoto(seasonKey,url){const d=JSON.parse(JSON.stringify(data));if(!d.gallery[activeTeam])d.gallery[activeTeam]={};if(!d.gallery[activeTeam][seasonKey])d.gallery[activeTeam][seasonKey]=[];d.gallery[activeTeam][seasonKey].push({id:"gi"+Date.now(),url,uploadedAt:new Date().toISOString()});save(d);}
-  function deleteGalleryPhoto(seasonKey,photoId){const d=JSON.parse(JSON.stringify(data));if(d.gallery[activeTeam]&&d.gallery[activeTeam][seasonKey])d.gallery[activeTeam][seasonKey]=d.gallery[activeTeam][seasonKey].filter(p=>p.id!==photoId);save(d);setLightbox(null);}
-  function moveTeam(tid,dir){const d=JSON.parse(JSON.stringify(data));const order=[...(d.teamOrder||Object.keys(d.teams))];const i=order.indexOf(tid);const ni=i+dir;if(ni<0||ni>=order.length)return;[order[i],order[ni]]=[order[ni],order[i]];d.teamOrder=order;save(d);}
-
+  function switchTeam(tid){setActiveTeam(tid);setSelectedPlayer(null);setPage("home");const cfg=getTeamCfg(data,tid);setSeason(cfg.seasons[1]||"All Time");setModal(null);setSortCol("P");setSortDir(-1);}
   function handleSeasonChange(val){setSeason(val);setSortCol("P");setSortDir(-1);}
 
-  const record = getRecord(games,season);
-  const playerInView = selectedPlayer?players.find(p=>p.id===selectedPlayer.id)||selectedPlayer:null;
-  const fontFaceCSS = Object.entries(teamFonts).filter(([,v])=>v).map(([tid,url])=>"@font-face{font-family:'TeamFont_"+tid+"';src:url('"+url+"');}").join(" ");
+  function savePlayer(p,isEdit){const d=cloneData();if(isEdit)d.players[activeTeam]=d.players[activeTeam].map(x=>x.id===p.id?p:x);else d.players[activeTeam].push({...p,id:"p"+Date.now()});save(d);setModal(null);}
+  function deletePlayer(id){const d=cloneData();d.players[activeTeam]=d.players[activeTeam].filter(p=>p.id!==id);save(d);setModal(null);if(selectedPlayer&&selectedPlayer.id===id){setSelectedPlayer(null);setPage("roster");}}
+  function saveGame(game){const d=cloneData();d.games[activeTeam].push({...game,id:"g"+Date.now()});save(d);setModal(null);if(game.result)setPage("home");else setPage("schedule");}
+  function enterResult(gameId,result){const d=cloneData();d.games[activeTeam]=d.games[activeTeam].map(g=>g.id===gameId?{...g,...result}:g);save(d);setModal(null);setPage("home");}
+  function deleteGame(gid){const d=cloneData();d.games[activeTeam]=d.games[activeTeam].filter(g=>g.id!==gid);save(d);}
+  function saveStatOverride(player,vals){const d=cloneData();d.statOverrides[player.id+"_"+season]={...vals};save(d);setModal(null);}
+  function savePhoto(pid,url){const d=cloneData();d.playerPhotos[pid]=url;save(d);}
+  function saveTeamLogo(tid,url){const d=cloneData();d.teamLogos[tid]=url;save(d);}
+  function saveTeamSecondaryLogo(tid,url){const d=cloneData();if(!d.teamSecondaryLogos)d.teamSecondaryLogos={};d.teamSecondaryLogos[tid]=url;save(d);}
+  function saveTeamFont(tid,url){const d=cloneData();d.teamFonts[tid]=url;save(d);}
+  function saveTeamName(tid,nm){const d=cloneData();d.teams[tid].name=nm;save(d);}
+  function saveTeamColor(tid,color){const d=cloneData();d.teams[tid].color=color;save(d);}
+  function saveAdminPassword(pw){const d=cloneData();d.adminPassword=pw;save(d);}
+  function addTeam(){const d=cloneData();const tid="team"+Date.now();d.teams[tid]={name:"New Team",color:"#444444"};d.players[tid]=[];d.games[tid]=[];d.teamOrder=[...(d.teamOrder||[]),tid];if(!d.customSeasons)d.customSeasons={};d.customSeasons[tid]=[];save(d);switchTeam(tid);setPage("settings");}
+  function deleteTeam(tid){
+    if(teamOrder.length<=1)return;
+    const d=cloneData();delete d.teams[tid];delete d.players[tid];delete d.games[tid];
+    if(d.teamLogos)delete d.teamLogos[tid];
+    if(d.teamSecondaryLogos)delete d.teamSecondaryLogos[tid];
+    if(d.teamFonts)delete d.teamFonts[tid];
+    if(d.customSeasons)delete d.customSeasons[tid];
+    d.teamOrder=(d.teamOrder||[]).filter(id=>id!==tid);save(d);
+    const firstTid=d.teamOrder[0]||Object.keys(d.teams)[0];
+    const cfg=getTeamCfg(d,firstTid);
+    setActiveTeam(firstTid);setSeason(cfg.seasons[1]||"All Time");setPage("home");
+  }
+  function addGalleryPhoto(seasonKey,url){const d=cloneData();if(!d.gallery[activeTeam])d.gallery[activeTeam]={};if(!d.gallery[activeTeam][seasonKey])d.gallery[activeTeam][seasonKey]=[];d.gallery[activeTeam][seasonKey].push({id:"gi"+Date.now(),url,uploadedAt:new Date().toISOString()});save(d);}
+  function deleteGalleryPhoto(seasonKey,photoId){const d=cloneData();if(d.gallery[activeTeam]&&d.gallery[activeTeam][seasonKey])d.gallery[activeTeam][seasonKey]=d.gallery[activeTeam][seasonKey].filter(p=>p.id!==photoId);save(d);setLightbox(null);}
+  function moveTeam(tid,dir){const d=cloneData();const order=[...(d.teamOrder||Object.keys(d.teams))];const i=order.indexOf(tid);const ni=i+dir;if(ni<0||ni>=order.length)return;[order[i],order[ni]]=[order[ni],order[i]];d.teamOrder=order;save(d);}
+  function addSeason(tid,seasonName,carryoverIds){const d=cloneData();if(!d.customSeasons)d.customSeasons={};if(!d.customSeasons[tid])d.customSeasons[tid]=[];d.customSeasons[tid].unshift(seasonName);(d.players[tid]||[]).forEach(p=>{if(carryoverIds.includes(p.id)){if(!p.activeSeasons)p.activeSeasons=[];if(!p.activeSeasons.includes(seasonName))p.activeSeasons.unshift(seasonName);}});save(d);if(tid===activeTeam)setSeason(seasonName);}
+  function deleteSeason(tid,seasonName){const d=cloneData();if(d.customSeasons&&d.customSeasons[tid])d.customSeasons[tid]=d.customSeasons[tid].filter(s=>s!==seasonName);(d.players[tid]||[]).forEach(p=>{if(p.activeSeasons)p.activeSeasons=p.activeSeasons.filter(s=>s!==seasonName);});save(d);if(tid===activeTeam&&season===seasonName){const cfg=getTeamCfg(d,tid);setSeason(cfg.seasons[1]||"All Time");}}
 
-  const StatRow = ({cols,stats,highlight})=>(
+  const record=getRecord(games,season);
+  const playerInView=selectedPlayer?players.find(p=>p.id===selectedPlayer.id)||selectedPlayer:null;
+  const fontFaceCSS=Object.entries(teamFonts).filter(([,v])=>v).map(([tid,url])=>"@font-face{font-family:'TeamFont_"+tid+"';src:url('"+url+"');}").join(" ");
+  const secondaryLogo=teamSecondaryLogos[activeTeam]||null;
+
+  const StatRow=({cols,stats,highlight})=>(
     <div style={{display:"flex",borderRadius:8,overflow:"hidden",border:"1px solid "+tc+"22"}}>
       {cols.map((c,i,arr)=>(
         <div key={c} style={{flex:1,textAlign:"center",padding:"10px 4px",background:i%2===0?"#f5f5f5":"#fff",borderRight:i<arr.length-1?"0.5px solid #ddd":"none"}}>
@@ -609,11 +943,11 @@ function App() {
       {/* Team toggle */}
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
         {teamOrder.map(tid=>{
-          const t=data.teams[tid], active=activeTeam===tid, logo=teamLogos[tid];
+          const t=data.teams[tid],active=activeTeam===tid,logo=teamLogos[tid];
           return (
-            <button key={tid} onClick={()=>{setActiveTeam(tid);setSelectedPlayer(null);setPage("home");setSeason(getTeamCfg(data,tid).seasons[1]||getTeamCfg(data,tid).seasons[0]);setModal(null);setSortCol("P");setSortDir(-1);}}
-              style={{flex:1,minWidth:120,padding:"8px 6px",borderRadius:10,border:"2px solid "+(active?t.color:"#ccc"),background:active?t.color:"#fff",color:active?"#fff":"#222",fontWeight:500,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-              {logo&&<img src={logo} alt="" style={{width:26,height:26,objectFit:"contain",borderRadius:4,flexShrink:0}}/>}
+            <button key={tid} onClick={()=>switchTeam(tid)}
+              style={{flex:1,minWidth:100,padding:"8px 6px",borderRadius:10,border:"2px solid "+(active?t.color:"#ccc"),background:active?t.color:"#fff",color:active?"#fff":"#222",fontWeight:500,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              {logo&&<img src={logo} alt="" style={{width:24,height:24,objectFit:"contain",borderRadius:4,flexShrink:0}}/>}
               <span>{t.name}</span>
             </button>
           );
@@ -643,7 +977,7 @@ function App() {
 
       {/* Nav */}
       <div style={{display:"flex",borderBottom:"2px solid #ddd",marginBottom:16,overflowX:"auto"}}>
-        {["home","roster","stats","games","gallery","settings"].map(p=>(
+        {["home","roster","stats","schedule","gallery","settings"].map(p=>(
           <button key={p} onClick={()=>{
             if(p==="settings"){requireAdmin(()=>{setPage("settings");setSelectedPlayer(null);setModal(null);});return;}
             setPage(p);setSelectedPlayer(null);setModal(null);
@@ -657,13 +991,37 @@ function App() {
       {/* Home */}
       {!selectedPlayer&&page==="home"&&(
         <div>
+          {nextGame&&<div>
+            <div style={{fontWeight:500,fontSize:15,marginBottom:10,color:"#777"}}>Up Next</div>
+            <UpNextCard game={nextGame} tc={tc} secondaryLogo={secondaryLogo} onEnterResult={()=>requireAdmin(()=>setModal({type:"enterResult",game:nextGame}))}/>
+          </div>}
           <div style={{fontWeight:500,fontSize:15,marginBottom:14,color:"#777"}}>Game Recaps</div>
-          {[...games].filter(g=>season==="All Time"||g.season===season).reverse().map(g=>(
-            <ArticleCard key={g.id} game={g} tc={tc} logo={teamLogos[activeTeam]}/>
-          ))}
-          {games.filter(g=>season==="All Time"||g.season===season).length===0&&(
-            <div style={{color:"#777",fontSize:14,textAlign:"center",padding:"40px 0"}}>No games yet. Add a game to see recaps here!</div>
-          )}
+          {completedGames.length===0&&<div style={{color:"#777",fontSize:14,textAlign:"center",padding:"30px 0"}}>No games yet. Add a game to see recaps here!</div>}
+          {completedGames.map(g=><ArticleCard key={g.id} game={g} tc={tc} secondaryLogo={secondaryLogo} players={players}/>)}
+        </div>
+      )}
+
+      {/* Schedule */}
+      {!selectedPlayer&&page==="schedule"&&(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <span style={{fontWeight:500,fontSize:15}}>Schedule</span>
+            <button style={s.btn} onClick={()=>requireAdmin(()=>setModal({type:"addGame"}))}>+ Add Game</button>
+          </div>
+          {upcomingGames.length>0&&<>
+            <div style={{fontWeight:500,fontSize:13,color:"#777",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Upcoming</div>
+            {upcomingGames.map(g=>(
+              <UpcomingGameCard key={g.id} game={g} tc={tc} s={s} onEnterResult={()=>requireAdmin(()=>setModal({type:"enterResult",game:g}))} onDelete={()=>requireAdmin(()=>deleteGame(g.id))}/>
+            ))}
+            <div style={{height:8}}/>
+          </>}
+          {completedGames.length>0&&<>
+            <div style={{fontWeight:500,fontSize:13,color:"#777",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Results</div>
+            {completedGames.map(g=>(
+              <ScheduleResultCard key={g.id} game={g} tc={tc} players={players} onDelete={()=>requireAdmin(()=>deleteGame(g.id))}/>
+            ))}
+          </>}
+          {upcomingGames.length===0&&completedGames.length===0&&<div style={{color:"#777",fontSize:14,textAlign:"center",padding:"40px 0"}}>No games yet. Add one to get started!</div>}
         </div>
       )}
 
@@ -681,7 +1039,7 @@ function App() {
               <div key={p.id} style={{...s.card,cursor:"pointer"}} onClick={()=>{setSelectedPlayer(p);setModal(null);}}>
                 <div style={{display:"flex",alignItems:"center",gap:12}}>
                   {photo?<img src={photo} style={{width:42,height:42,borderRadius:"50%",objectFit:"cover",border:"2px solid "+tc}}/>:<div style={{width:42,height:42,borderRadius:"50%",background:tc+"22",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,color:tc,fontSize:14}}>{"#"+p.number}</div>}
-                  <div><div style={{fontWeight:500,fontSize:15}}>{p.name}</div><div style={{fontSize:13,color:"#777"}}>{p.position+" - #"+p.number}</div></div>
+                  <div><div style={{fontWeight:500,fontSize:15,display:"flex",alignItems:"center"}}>{p.name}<CaptainBadge role={p.captainRole}/></div><div style={{fontSize:13,color:"#777"}}>{p.position+" - #"+p.number}</div></div>
                   <span style={{marginLeft:"auto",color:"#bbb",fontSize:18}}>›</span>
                 </div>
               </div>
@@ -701,9 +1059,9 @@ function App() {
                   <th style={{...s.th("",false),textAlign:"left",paddingLeft:10}}>Player</th>
                   {SKATER_COLS.map(c=><th key={c} style={s.th(c,sortCol===c)} onClick={()=>{setSortCol(c);setSortDir(sortCol===c?-sortDir:-1);}}>{c}{sortCol===c?(sortDir<0?"↓":"↑"):""}</th>)}
                 </tr></thead>
-                <tbody>{sortSkaters(skaters).map(p=>{const st=getCachedStats(p);return(
+                <tbody>{sortSkaters(skaters).map(p=>{const st=getStats(p);return(
                   <tr key={p.id} onClick={()=>{setSelectedPlayer(p);setModal(null);}} style={{cursor:"pointer",borderBottom:"0.5px solid #ddd"}}>
-                    <td style={{...s.td,textAlign:"left",paddingLeft:10}}><span style={{fontWeight:500}}>{p.name}</span><span style={{fontSize:11,color:"#777",marginLeft:5}}>{"#"+p.number}</span></td>
+                    <td style={{...s.td,textAlign:"left",paddingLeft:10}}><span style={{fontSize:11,color:"#777",marginRight:5}}>{p.position}</span><span style={{fontWeight:500}}>{p.name}</span><CaptainBadge role={p.captainRole}/><span style={{fontSize:11,color:"#777",marginLeft:5}}>{"#"+p.number}</span></td>
                     {SKATER_COLS.map(c=><td key={c} style={{...s.td,fontWeight:c==="P"?600:400,color:c==="P"?tc:"#222"}}>{st[c]}</td>)}
                   </tr>
                 );})}</tbody>
@@ -718,9 +1076,9 @@ function App() {
                   <th style={{...s.th("",false),textAlign:"left",paddingLeft:10}}>Player</th>
                   {GOALIE_COLS.map(c=><th key={c} style={s.th(c,sortCol===c)} onClick={()=>{setSortCol(c);setSortDir(sortCol===c?-sortDir:-1);}}>{c}{sortCol===c?(sortDir<0?"↓":"↑"):""}</th>)}
                 </tr></thead>
-                <tbody>{sortGoalies(goalies).map(p=>{const st=getCachedStats(p);return(
+                <tbody>{sortGoalies(goalies).map(p=>{const st=getStats(p);return(
                   <tr key={p.id} onClick={()=>{setSelectedPlayer(p);setModal(null);}} style={{cursor:"pointer",borderBottom:"0.5px solid #ddd"}}>
-                    <td style={{...s.td,textAlign:"left",paddingLeft:10}}><span style={{fontWeight:500}}>{p.name}</span><span style={{fontSize:11,color:"#777",marginLeft:5}}>{"#"+p.number}</span></td>
+                    <td style={{...s.td,textAlign:"left",paddingLeft:10}}><span style={{fontSize:11,color:"#777",marginRight:5}}>{p.position}</span><span style={{fontWeight:500}}>{p.name}</span><CaptainBadge role={p.captainRole}/><span style={{fontSize:11,color:"#777",marginLeft:5}}>{"#"+p.number}</span></td>
                     {GOALIE_COLS.map(c=><td key={c} style={{...s.td,fontWeight:c==="W"?600:400,color:c==="W"?tc:"#222"}}>{st[c]}</td>)}
                   </tr>
                 );})}</tbody>
@@ -731,40 +1089,6 @@ function App() {
         </div>
       )}
 
-      {/* Games */}
-      {!selectedPlayer&&page==="games"&&(
-        <div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <div>
-              <span style={{fontWeight:500,fontSize:15}}>Games</span>
-              {record.GP>0&&<span style={{marginLeft:10,fontSize:14,color:"#777"}}>Record: <span style={{fontWeight:500,color:tc}}>{record.W+"-"+record.L+(record.T>0?"-"+record.T:"")+(record.OTL>0?" ("+record.OTL+" OTL)":"")}</span></span>}
-            </div>
-            <button style={s.btn} onClick={()=>requireAdmin(()=>setModal({type:"addGame"}))}>+ Add Game</button>
-          </div>
-          {games.filter(g=>season==="All Time"||g.season===season).length===0&&<div style={{color:"#777",fontSize:14}}>No games yet.</div>}
-          {[...games].filter(g=>season==="All Time"||g.season===season).reverse().map(g=>{
-            const resColor=g.result==="W"?"#1a7a3c":g.result==="L"?"#c41a1a":g.result==="OTL"?"#b06000":"#777";
-            const resBg=g.result==="W"?"#e8f5ee":g.result==="L"?"#fdecea":g.result==="OTL"?"#fff3e0":"#f5f5f5";
-            return (
-              <div key={g.id} style={s.card}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                  <div>
-                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                      <span style={{fontWeight:500,fontSize:15}}>{"vs "+g.opponent}</span>
-                      {g.result&&<span style={{fontSize:13,fontWeight:600,color:resColor,background:resBg,borderRadius:6,padding:"2px 8px"}}>{g.result}</span>}
-                      {g.gameType&&g.gameType!=="Regular Season"&&<span style={{fontSize:12,color:tc,background:tc+"18",borderRadius:6,padding:"2px 8px",fontWeight:500}}>{g.gameType}</span>}
-                    </div>
-                    <div style={{fontSize:13,color:"#777",marginTop:2}}>{g.date+" - "+g.season}</div>
-                    {g.score&&<div style={{fontSize:13,marginTop:2}}>{"Score: "+g.score}</div>}
-                  </div>
-                  <button onClick={()=>requireAdmin(()=>deleteGame(g.id))} style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:20,lineHeight:1,padding:"0 4px"}}>X</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* Gallery */}
       {!selectedPlayer&&page==="gallery"&&(
         <GalleryPage gallery={data.gallery} activeTeam={activeTeam} season={season} seasons={seasons} tc={tc} s={s} onAdd={addGalleryPhoto} onOpenLightbox={setLightbox}/>
@@ -772,25 +1096,25 @@ function App() {
 
       {/* Settings */}
       {!selectedPlayer&&page==="settings"&&(
-        <SettingsPage data={data} teamLogos={teamLogos} teamFonts={teamFonts} teamOrder={teamOrder} onMoveTeam={moveTeam} onAddTeam={()=>requireAdmin(addTeam)} onSaveLogo={saveTeamLogo} onSaveFont={saveTeamFont} onSaveName={saveTeamName} onSaveColor={saveTeamColor} onDeleteTeam={deleteTeam} onSavePassword={saveAdminPassword} s={s}/>
+        <SettingsPage data={data} teamLogos={teamLogos} teamSecondaryLogos={teamSecondaryLogos} teamFonts={teamFonts} teamOrder={teamOrder} onMoveTeam={moveTeam} onAddTeam={()=>requireAdmin(addTeam)} onAddSeason={addSeason} onDeleteSeason={deleteSeason} onSaveLogo={saveTeamLogo} onSaveSecondaryLogo={saveTeamSecondaryLogo} onSaveFont={saveTeamFont} onSaveName={saveTeamName} onSaveColor={saveTeamColor} onDeleteTeam={deleteTeam} onSavePassword={saveAdminPassword} s={s}/>
       )}
 
       {/* Player profile */}
       {selectedPlayer&&playerInView&&(()=>{
-        const p=playerInView, st=getStats(p), isG=p.position==="G";
+        const p=playerInView,st=getStats(p),isG=p.position==="G";
         const career=computeStats(p,games,data.statOverrides,"All Time",seasons);
         const seasonRows=seasons.filter(sv=>sv!=="All Time").reverse().map(sv=>({season:sv,stats:computeStats(p,games,data.statOverrides,sv,seasons)})).filter(r=>r.stats.GP>0);
-        const playerGames=games.filter(g=>season==="All Time"?(isG?g.goalieStats?.[p.id]:g.skaterStats?.[p.id]):g.season===season&&(isG?g.goalieStats?.[p.id]:g.skaterStats?.[p.id]));
+        const playerGames=games.filter(g=>g.result&&(season==="All Time"?(isG?g.goalieStats?.[p.id]:g.skaterStats?.[p.id]):g.season===season&&(isG?g.goalieStats?.[p.id]:g.skaterStats?.[p.id])));
         const photo=data.playerPhotos?.[p.id];
-        const sumG=["GP","W","L","GAA"], sumS=["GP","G","A","P"];
-        const brkG=["GP","W","L","T","OTL","SO","GA","GAA"], brkS=["GP","G","A","P","PPG","PIM"];
+        const sumG=["GP","W","L","GAA"],sumS=["GP","G","A","P"];
+        const brkG=["GP","W","L","T","OTL","SO","GA","GAA"],brkS=["GP","G","A","P","PPG","PIM"];
         return (
           <div>
             <button onClick={()=>{setSelectedPlayer(null);setModal(null);}} style={{...s.sec,marginBottom:14,fontSize:13}}>Back</button>
             <div style={{background:tc,borderRadius:12,padding:20,color:"#fff",marginBottom:14}}>
               <div style={{display:"flex",alignItems:"center",gap:16}}>
-                <PhotoAvatar photo={photo} number={p.number} size={64} tc={tc} pid={p.id} onSave={savePhoto}/>
-                <div style={{flex:1}}><div style={{fontSize:20,fontWeight:600}}>{p.name}</div><div style={{fontSize:14,opacity:0.85}}>{p.position+" - #"+p.number+" - "+team.name}</div></div>
+                <PhotoAvatar photo={photo} number={p.number} size={64} pid={p.id} onSave={savePhoto}/>
+                <div style={{flex:1}}><div style={{fontSize:20,fontWeight:600,display:"flex",alignItems:"center",flexWrap:"wrap",gap:4}}>{p.name}<CaptainBadge role={p.captainRole}/></div><div style={{fontSize:14,opacity:0.85}}>{p.position+" - #"+p.number+" - "+team.name}</div></div>
                 <button onClick={()=>requireAdmin(()=>setModal({type:"editPlayer",player:{...p}}))} style={{background:"#fff",color:tc,border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:13,fontWeight:600}}>Edit</button>
               </div>
             </div>
@@ -833,20 +1157,21 @@ function App() {
                 </div>
               </div>
             )}
-            <GameLog games={playerGames} isG={isG} player={p} tc={tc} s={s}/>
+            <GameLog games={playerGames} isG={isG} player={p} tc={tc} s={s} allPlayers={players}/>
           </div>
         );
       })()}
 
-      {/* Modal */}
+      {/* Modals */}
       {modal&&(
         <div style={{marginTop:8,background:"#fff",borderRadius:14,border:"2px solid "+tc,padding:20}}>
           <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
-            <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#777",lineHeight:1}}>X</button>
+            <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#777",lineHeight:1}}>×</button>
           </div>
           {modal.type==="adminLogin"&&<AdminLoginModal onSuccess={()=>{setIsAdmin(true);setModal(null);modal.onSuccess();}} onClose={()=>setModal(null)} s={s} tc={tc} adminPassword={data.adminPassword}/>}
           {(modal.type==="addPlayer"||modal.type==="editPlayer")&&<PlayerModal modal={modal} onSave={savePlayer} onDelete={deletePlayer} onClose={()=>setModal(null)} s={s} tc={tc} teamSeasons={seasons}/>}
-          {modal.type==="addGame"&&<GameModal modal={modal} players={activePlayers} seasons={seasons.filter(sv=>sv!=="All Time")} defaultSeason={season!=="All Time"?season:seasons[1]} onSave={saveGame} onClose={()=>setModal(null)} s={s} tc={tc}/>}
+          {modal.type==="addGame"&&<AddGameModal players={activePlayers} seasons={seasons.filter(sv=>sv!=="All Time")} defaultSeason={season!=="All Time"?season:seasons[1]||""} onSave={saveGame} onClose={()=>setModal(null)} s={s} tc={tc}/>}
+          {modal.type==="enterResult"&&<EnterResultModal game={modal.game} players={activePlayers} onSave={enterResult} onClose={()=>setModal(null)} s={s} tc={tc}/>}
           {modal.type==="editStats"&&<EditStatsModal modal={modal} onSave={saveStatOverride} onClose={()=>setModal(null)} s={s} tc={tc}/>}
         </div>
       )}
